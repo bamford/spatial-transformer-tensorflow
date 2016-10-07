@@ -66,6 +66,9 @@ def transformer(U, theta, out_size, name='SpatialTransformer', **kwargs):
             width = tf.shape(im)[2]
             channels = tf.shape(im)[3]
 
+            max_y = tf.cast(tf.shape(im)[1] - 1, 'int32')
+            max_x = tf.cast(tf.shape(im)[2] - 1, 'int32')
+
             x = tf.cast(x, 'float32')
             y = tf.cast(y, 'float32')
             height_f = tf.cast(height, 'float32')
@@ -73,12 +76,17 @@ def transformer(U, theta, out_size, name='SpatialTransformer', **kwargs):
             out_height = out_size[0]
             out_width = out_size[1]
             zero = tf.zeros([], dtype='int32')
-            max_y = tf.cast(tf.shape(im)[1] - 1, 'int32')
-            max_x = tf.cast(tf.shape(im)[2] - 1, 'int32')
 
-            # scale indices from [-1, 1] to [0, width/height]
-            x = (x + 1.0)*(width_f) / 2.0
-            y = (y + 1.0)*(height_f) / 2.0
+
+            # scale indices from [-1, 1] to [0, width/height - 1]
+            x = tf.clip_by_value(x, -1, 1)
+            y = tf.clip_by_value(y, -1, 1)
+
+            x = (x + 1.0) / 2.0 * (width_f-1.001)
+            y = (y + 1.0) / 2.0 * (height_f-1.001)
+
+
+
 
             # do sampling
             x0 = tf.cast(tf.floor(x), 'int32')
@@ -90,6 +98,9 @@ def transformer(U, theta, out_size, name='SpatialTransformer', **kwargs):
             x1 = tf.clip_by_value(x1, zero, max_x)
             y0 = tf.clip_by_value(y0, zero, max_y)
             y1 = tf.clip_by_value(y1, zero, max_y)
+
+
+
             dim2 = width
             dim1 = width*height
             base = _repeat(tf.range(num_batch)*dim1, out_height*out_width)

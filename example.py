@@ -26,6 +26,8 @@ im = im / 255.
 im = im.reshape(1, 1200, 1600, 3)
 im = im.astype('float32')
 
+plt.imshow(im[0])
+
 # %% Let the output size of the transformer be half the image size.
 out_size = (600, 800)
 
@@ -45,7 +47,7 @@ with tf.variable_scope('spatial_transformer_0'):
     W_fc1 = tf.Variable(tf.zeros([1200 * 1600 * 3, n_fc]), name='W_fc1')
 
     # %% Zoom into the image
-    initial = np.array([[0.5, 0, 0], [0, 0.5, 0]])
+    initial = np.array([[1.1, 0, 0], [0, 1.1, 0]])
     initial = initial.astype('float32')
     initial = initial.flatten()
 
@@ -58,4 +60,6 @@ sess = tf.Session()
 sess.run(tf.initialize_all_variables())
 y = sess.run(h_trans, feed_dict={x: batch})
 
-# plt.imshow(y[0])
+plt.imshow(y[0])
+
+input("Press Enter to continue...")

@@ -14,7 +14,7 @@
 # ==============================================================================
 from scipy import ndimage
 import tensorflow as tf
-from stn import affine_transformer
+from stn import tps_transformer
 import numpy as np
 import scipy.misc
 
@@ -30,12 +30,12 @@ im = im.astype('float32')
 out_size = (600, 800)
 
 # %% Simulate batch
-num_batch = 5
+num_batch = 2
 batch = im
 for i in range(num_batch-1):
   batch = np.append(batch, im, axis=0)
 
-x = tf.placeholder(tf.float32, [num_batch, 1200, 1600, 3])
+x = tf.placeholder(tf.float32, [None, 1200, 1600, 3])
 x = tf.cast(batch, 'float32')
 
 # %% Run session
@@ -44,25 +44,29 @@ with tf.Session() as sess:
     # %% Create localisation network and convolutional layer
     with tf.variable_scope('spatial_transformer_0'):
     
-        # %% Create a fully-connected layer with 6 output nodes
-        n_fc = 6
+        # %% Create a fully-connected layer with 16*2 output nodes
+        n_fc = 16*2
         W_fc1 = tf.Variable(tf.zeros([1200*1600*3, n_fc]), name='W_fc1')
     
-        # %% Zoom into the image
-        initial = np.array([[1.0, 0, 0.0], [0, 1.0, 0.0]])
+        # %% identity transformation
+        initial = np.zeros([n_fc])
         initial = initial.astype('float32')
-        initial = initial.flatten()
+
+        initial[5] = -0.1
+        initial[7] = 0.1
     
         b_fc1 = tf.Variable(initial_value=initial, name='b_fc1')
+
         h_fc1 = tf.matmul(tf.zeros([num_batch, 1200*1600*3]), W_fc1) + b_fc1
-        h_trans = affine_transformer(x, h_fc1, out_size)
+        h_trans = tps_transformer(x, h_fc1, out_size)
 
     # %% Run session
     sess.run(tf.initialize_all_variables())
-    y, tmp = sess.run(h_trans, feed_dict={x: batch})
-    print(tmp)
-    print(tmp.shape)
+    y, dest_points = sess.run(h_trans, feed_dict={x: batch})
+    print(dest_points)
+    print(dest_points.shape)
 
 # save our result
-scipy.misc.imsave('example1_stn.png', y[0])
+img = y[0]
+scipy.misc.imsave('example3_stn.png', img)
 

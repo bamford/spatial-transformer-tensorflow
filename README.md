@@ -8,7 +8,8 @@ The Spatial Transformer Network [1] allows the spatial manipulation of data with
 
 ### API 
 
-A Spatial Transformer Network implemented in Tensorflow 0.7 and based on [2].
+A Spatial Transformer Network implemented in Tensorflow 0.9 and based on [2],
+which is also in [3]. TODO: add Thin Plate Spline (TPS) deformation layer.
 
 #### How to use
 
@@ -42,18 +43,10 @@ identity = identity.flatten()
 theta = tf.Variable(initial_value=identity)
 ```        
 
-#### Experiments
-
-<div align="center">
-  <img width="600px" src="http://i.imgur.com/HtCBYk2.png"><br><br>
-</div>
-
-We used cluttered MNIST. Left column are the input images, right are the attended parts of the image by an STN.
-
-All experiments were run in Tensorflow 0.7.
-
 ### References
 
 [1] Jaderberg, Max, et al. "Spatial Transformer Networks." arXiv preprint arXiv:1506.02025 (2015)
 
 [2] https://github.com/skaae/transformer_network/blob/master/transformerlayer.py
+
+[3] https://github.com/tensorflow/models/tree/master/transformer/transformerlayer.py

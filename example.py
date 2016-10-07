@@ -14,7 +14,7 @@
 # ==============================================================================
 from scipy import ndimage
 import tensorflow as tf
-from spatial_transformer import transformer
+from stn import affine_transformer
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -28,7 +28,7 @@ im = im.astype('float32')
 
 plt.imshow(im[0])
 
-# %% Let the output size of the transformer be half the image size.
+# %% Let the output size of the affine transformer be half the image size.
 out_size = (600, 800)
 
 # %% Simulate batch
@@ -53,13 +53,12 @@ with tf.variable_scope('spatial_transformer_0'):
 
     b_fc1 = tf.Variable(initial_value=initial, name='b_fc1')
     h_fc1 = tf.matmul(tf.zeros([num_batch, 1200 * 1600 * 3]), W_fc1) + b_fc1
-    h_trans = transformer(x, h_fc1, out_size)
+    h_trans = affine_transformer(x, h_fc1, out_size)
 
 # %% Run session
 sess = tf.Session()
 sess.run(tf.initialize_all_variables())
 y = sess.run(h_trans, feed_dict={x: batch})
 
-plt.imshow(y[0])
+#plt.imshow(y[0])
 
-input("Press Enter to continue...")

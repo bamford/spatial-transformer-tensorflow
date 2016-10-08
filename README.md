@@ -6,25 +6,23 @@ The Spatial Transformer Network [1] allows the spatial manipulation of data with
   <img width="600px" src="http://i.imgur.com/ExGDVul.png"><br><br>
 </div>
 
-### API 
-
 A Spatial Transformer Network implemented in Tensorflow 0.9 and based on [2] \(which is also in [3]\) and [4].
 
 This tensorflow implementation supports Affine Transformations and Thin Plate Spline Deformations.
 
-#### How to use
+### How to use
 
 <div align="center">
   <img src="http://i.imgur.com/gfqLV3f.png"><br><br>
 </div>
 
-##### Affine STN
+#### Affine STN
 For spatial transformer with affine transformations:
 ```python
 stn.affine_transformer(U, theta, out_size)
 ```
 
-###### Parameters
+##### Parameters
 
     U : float 
         The output of a convolutional net should have the
@@ -35,14 +33,25 @@ stn.affine_transformer(U, theta, out_size)
     out_size: tuple of two ints
         The size of the output of the network
 
+##### Notes
+To initialize the network to the identity transform init ``theta`` to :
 
-##### TPS STN
+```python
+identity = np.array([[1., 0., 0.],
+                    [0., 1., 0.]]) 
+identity = identity.flatten()
+theta = tf.Variable(initial_value=identity)
+```        
+
+
+
+#### TPS STN
 For spatial transformer with thin plate splines deformations:
 ```python
 stn.tps_transformer(U, theta, out_size)
 ```
 
-###### Parameters
+##### Parameters
 
     U : float 
         The output of a convolutional net should have the
@@ -53,9 +62,7 @@ stn.tps_transformer(U, theta, out_size)
     out_size: tuple of two ints
         The size of the output of the network
         
-    
-    
-#### Notes
+##### Notes
 To initialize the network to the identity transform init ``theta`` to :
 
 ```python
@@ -65,6 +72,7 @@ identity = identity.flatten()
 theta = tf.Variable(initial_value=identity)
 ```        
 
+    
 ### References
 
 [1] Jaderberg, Max, et al. "Spatial Transformer Networks." arXiv preprint arXiv:1506.02025 (2015)

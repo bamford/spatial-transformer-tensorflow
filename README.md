@@ -8,7 +8,7 @@ The Spatial Transformer Network [1] allows the spatial manipulation of data with
 
 ### API 
 
-A Spatial Transformer Network implemented in Tensorflow 0.9 and based on [2] (which is also in [3]) and [4].
+A Spatial Transformer Network implemented in Tensorflow 0.9 and based on [2] \(which is also in [3]\) and [4].
 
 This tensorflow implementation supports Affine Transformations and Thin Plate Spline Deformations.
 

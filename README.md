@@ -59,7 +59,7 @@ stn.tps_transformer(U, theta, out_size)
         shape [num_batch, height, width, num_channels]. 
     theta: float   
         The output of the
-        localisation network should be [num_control_points, 2].
+        localisation network should be [num_batch, num_control_points x 2].
         num_control_points must be a square of an integer.
     out_size: tuple of two ints
         The size of the output of the network

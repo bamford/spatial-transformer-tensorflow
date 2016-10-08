@@ -1,4 +1,4 @@
-# Spatial Transformer Network
+# Spatial Transformer Network with Affine and Thin Plate Spline Transformations
 
 The Spatial Transformer Network [1] allows the spatial manipulation of data within the network.
 
@@ -8,8 +8,9 @@ The Spatial Transformer Network [1] allows the spatial manipulation of data with
 
 ### API 
 
-A Spatial Transformer Network implemented in Tensorflow 0.9 and based on [2],
-which is also in [3]. TODO: add Thin Plate Spline (TPS) deformation layer.
+A Spatial Transformer Network implemented in Tensorflow 0.9 and based on [2] (which is also in [3]) and [4].
+
+This tensorflow implementation supports Affine Transformations and Thin Plate Spline Deformations.
 
 #### How to use
 
@@ -50,3 +51,5 @@ theta = tf.Variable(initial_value=identity)
 [2] https://github.com/skaae/transformer_network/blob/master/transformerlayer.py
 
 [3] https://github.com/tensorflow/models/tree/master/transformer/transformerlayer.py
+
+[4] https://github.com/Lasagne/Lasagne/blob/master/lasagne/layers/special.py

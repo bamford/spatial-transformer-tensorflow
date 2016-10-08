@@ -23,7 +23,7 @@ For spatial transformer with affine transformations:
 stn.affine_transformer(U, theta, out_size)
 ```
 
-### Parameters
+##### Parameters
 
     U : float 
         The output of a convolutional net should have the

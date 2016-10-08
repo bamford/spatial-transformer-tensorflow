@@ -18,12 +18,13 @@ This tensorflow implementation supports Affine Transformations and Thin Plate Sp
   <img src="http://i.imgur.com/gfqLV3f.png"><br><br>
 </div>
 
+##### Affine STN
 For spatial transformer with affine transformations:
 ```python
 stn.affine_transformer(U, theta, out_size)
 ```
 
-##### Parameters
+###### Parameters
 
     U : float 
         The output of a convolutional net should have the
@@ -35,10 +36,23 @@ stn.affine_transformer(U, theta, out_size)
         The size of the output of the network
 
 
+##### TPS STN
 For spatial transformer with thin plate splines deformations:
 ```python
 stn.tps_transformer(U, theta, out_size)
 ```
+
+###### Parameters
+
+    U : float 
+        The output of a convolutional net should have the
+        shape [num_batch, height, width, num_channels]. 
+    theta: float   
+        The output of the
+        localisation network should be [num_batch, 6].
+    out_size: tuple of two ints
+        The size of the output of the network
+        
     
     
 #### Notes

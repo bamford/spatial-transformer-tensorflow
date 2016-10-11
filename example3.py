@@ -14,7 +14,7 @@
 # ==============================================================================
 from scipy import ndimage
 import tensorflow as tf
-from stn import tps_transformer
+from stn import TPSTransformer
 import numpy as np
 import scipy.misc
 
@@ -52,19 +52,19 @@ with tf.Session() as sess:
         initial = np.zeros([n_fc])
         initial = initial.astype('float32')
 
-        initial[5] = -0.1
-        initial[7] = 0.1
+        initial[5] = -0.2
+        initial[7] = -0.1
+        initial[8] = 0.2
     
         b_fc1 = tf.Variable(initial_value=initial, name='b_fc1')
 
         h_fc1 = tf.matmul(tf.zeros([num_batch, 1200*1600*3]), W_fc1) + b_fc1
-        h_trans = tps_transformer(x, h_fc1, out_size)
+        stl = TPSTransformer(x.get_shape().as_list(), n_fc/2, out_size)
+        h_trans = stl.transform(x, h_fc1)
 
     # %% Run session
     sess.run(tf.initialize_all_variables())
-    y, dest_points = sess.run(h_trans, feed_dict={x: batch})
-    print(dest_points)
-    print(dest_points.shape)
+    y = sess.run(h_trans, feed_dict={x: batch})
 
 # save our result
 img = y[0]

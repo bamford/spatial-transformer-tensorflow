@@ -14,7 +14,7 @@
 # ==============================================================================
 from scipy import ndimage
 import tensorflow as tf
-from stn import affine_transformer
+from stn import AffineTransformer
 import numpy as np
 import scipy.misc
 
@@ -42,6 +42,7 @@ x = tf.cast(batch, 'float32')
 with tf.Session() as sess:
   with tf.device("/cpu:0"):
     # %% Create localisation network and convolutional layer
+    stl = AffineTransformer()
     with tf.variable_scope('spatial_transformer_0'):
     
         # %% Create a fully-connected layer with 6 output nodes
@@ -55,13 +56,11 @@ with tf.Session() as sess:
     
         b_fc1 = tf.Variable(initial_value=initial, name='b_fc1')
         h_fc1 = tf.matmul(tf.zeros([num_batch, 1200*1600*3]), W_fc1) + b_fc1
-        h_trans = affine_transformer(x, h_fc1, out_size)
+        h_trans = stl.transform(x, h_fc1, out_size)
 
     # %% Run session
     sess.run(tf.initialize_all_variables())
-    y, tmp = sess.run(h_trans, feed_dict={x: batch})
-    print(tmp)
-    print(tmp.shape)
+    y = sess.run(h_trans, feed_dict={x: batch})
 
 # save our result
 scipy.misc.imsave('example1_stn.png', y[0])

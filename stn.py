@@ -1,12 +1,28 @@
 import tensorflow as tf
 import numpy as np
 
-def affine_transformer(U, theta, out_size, name='SpatialAffineTransformer', **kwargs):
-    """Spatial Affine Transformer Layer
+class AffineTransformer(object):
 
-    Implements a spatial transformer layer as described in [1]_.
-    Based on [2]_ and edited by David Dao for Tensorflow.
+  """Spatial Affine Transformer Layer
 
+  Implements a spatial transformer layer as described in [1]_.
+  Based on [2]_ and edited by David Dao for Tensorflow.
+
+
+  References
+  ----------
+  .. [1]  Spatial Transformer Networks
+          Max Jaderberg, Karen Simonyan, Andrew Zisserman, Koray Kavukcuoglu
+          Submitted on 5 Jun 2015
+  .. [2]  https://github.com/skaae/transformer_network/blob/master/transformerlayer.py
+
+  """
+
+  def __init__(self, name='SpatialAffineTransformer', **kwargs):
+    self.name = name
+  
+  def transform(self, U, theta, out_size):
+    """
     Parameters
     ----------
     U : float
@@ -17,14 +33,6 @@ def affine_transformer(U, theta, out_size, name='SpatialAffineTransformer', **kw
         localisation network should be [num_batch, 6].
     out_size: tuple of two ints
         The size of the output of the spatial network (height, width)
-
-    References
-    ----------
-    .. [1]  Spatial Transformer Networks
-            Max Jaderberg, Karen Simonyan, Andrew Zisserman, Koray Kavukcuoglu
-            Submitted on 5 Jun 2015
-    .. [2]  https://github.com/skaae/transformer_network/blob/master/transformerlayer.py
-
     Notes
     -----
     To initialize the network to the identity transform initialize ``theta`` to :
@@ -34,9 +42,9 @@ def affine_transformer(U, theta, out_size, name='SpatialAffineTransformer', **kw
         theta = tf.Variable(initial_value=identity)
 
     """
-    with tf.variable_scope(name):
+    with tf.variable_scope(self.name):
         output = _affine_transform(theta, U, out_size)
-        return output
+    return output
 
 
 def _repeat(x, n_repeats):
@@ -137,7 +145,6 @@ def _meshgrid(height, width):
 def _affine_transform(theta, input_dim, out_size):
     with tf.variable_scope('_affine_transform'):
         num_batch, height, width, num_channels = input_dim.get_shape().as_list()
-        print([num_batch, height, width, num_channels])
         theta = tf.reshape(theta, (-1, 2, 3))
         theta = tf.cast(theta, 'float32')
 
@@ -168,24 +175,11 @@ def _affine_transform(theta, input_dim, out_size):
         return output
 
 
-def tps_transformer(U, theta, out_size, name='SpatialTPSTransformer', **kwargs):
+class TPSTransformer(object):
     """Spatial Thin Plate Spline Transformer Layer
 
     Implements a spatial transformer layer as described in [1]_.
     Based on [2]_ and edited by Daniyar Turmukhambetov for Tensorflow.
-
-    Parameters
-    ----------
-    U : float
-        The output of a convolutional net should have the
-        shape [num_batch, height, width, num_channels].
-    theta: tensor of [num_batch, num_control_points x 2]  floats
-        num_control_points: a square of an int.
-        The number of control points of the thin plate spline deformation
-        Theta is the output of the localisation network, so it is 
-        the x and y coordinates of the destination offsets of each control point.
-    out_size: tuple of two ints
-        The size of the output of the spatial network (height, width)
 
     References
     ----------
@@ -199,19 +193,36 @@ def tps_transformer(U, theta, out_size, name='SpatialTPSTransformer', **kwargs):
     To initialize the network to the identity transform initialize ``theta`` to zeros
     """
 
+    def __init__(self, U_shape, num_control_points, out_size,  name='SpatialTPSTransformer', **kwargs):
+        """
+        Parameters
+        ----------
+        U : float
+            The output of a convolutional net should have the
+            shape [num_batch, height, width, num_channels].
+        theta: tensor of [num_batch, num_control_points x 2]  floats
+            num_control_points: a square of an int.
+            The number of control points of the thin plate spline deformation
+            Theta is the output of the localisation network, so it is 
+            the x and y coordinates of the destination offsets of each control point.
+        out_size: tuple of two ints
+            The size of the output of the spatial network (height, width)
+        """
+        num_control_points = int(num_control_points)
 
-    #The number of control points. Must be a
-    #    perfect square. Points will be used to generate an evenly spaced grid.
-    theta = tf.reshape(theta, [U.get_shape().as_list()[0], -1, 2])
-    num_control_points = theta.get_shape().as_list()[1]
+        self.right_mat, self.L_inv, self.source_points = _initialize_tps(U_shape, num_control_points, out_size)
+        self.name = name
+        self.out_size = out_size
 
-    with tf.variable_scope(name):
-        right_mat, L_inv, source_points = _initialize_tps(U.get_shape().as_list(), num_control_points, out_size)
-        output = _tps_transform(theta, U, out_size, right_mat, L_inv, source_points)
+    def transform(self, U, theta):
+        #The number of control points. Must be a
+        #    perfect square. Points will be used to generate an evenly spaced grid.
+
+        with tf.variable_scope(self.name):
+            output = _tps_transform(theta, U, self.out_size, self.right_mat, self.L_inv, self.source_points)
         return output
 
-def _tps_transform(
-        dest_offsets, U, out_size, right_mat, L_inv, source_points):
+def _tps_transform(dest_offsets, U, out_size, right_mat, L_inv, source_points):
 
     num_batch, height, width, num_channels = U.get_shape().as_list()
     num_control_points = source_points.shape[1]
@@ -252,7 +263,7 @@ def _tps_transform(
     output = tf.reshape(input_transformed, 
            tf.pack([num_batch, out_height, out_width, num_channels]))
     #output = tf.transpose(output, [0, 2, 3, 1])
-    return output, x_s_flat
+    return output
 
 
 def _U_func_numpy(x1, y1, x2, y2):

@@ -35,8 +35,8 @@ def affine_transformer(U, theta, out_size, name='SpatialAffineTransformer', **kw
 
     """
     with tf.variable_scope(name):
-        output, tmp = _affine_transform(theta, U, out_size)
-        return output, tmp
+        output = _affine_transform(theta, U, out_size)
+        return output
 
 
 def _repeat(x, n_repeats):
@@ -137,6 +137,7 @@ def _meshgrid(height, width):
 def _affine_transform(theta, input_dim, out_size):
     with tf.variable_scope('_affine_transform'):
         num_batch, height, width, num_channels = input_dim.get_shape().as_list()
+        print([num_batch, height, width, num_channels])
         theta = tf.reshape(theta, (-1, 2, 3))
         theta = tf.cast(theta, 'float32')
 
@@ -164,7 +165,7 @@ def _affine_transform(theta, input_dim, out_size):
 
         output = tf.reshape(
             input_transformed, tf.pack([num_batch, out_height, out_width, num_channels]))
-        return output, x_s_flat
+        return output
 
 
 def tps_transformer(U, theta, out_size, name='SpatialTPSTransformer', **kwargs):
@@ -198,10 +199,16 @@ def tps_transformer(U, theta, out_size, name='SpatialTPSTransformer', **kwargs):
     To initialize the network to the identity transform initialize ``theta`` to zeros
     """
 
+
+    #The number of control points. Must be a
+    #    perfect square. Points will be used to generate an evenly spaced grid.
+    theta = tf.reshape(theta, [U.get_shape().as_list()[0], -1, 2])
+    num_control_points = theta.get_shape().as_list()[1]
+
     with tf.variable_scope(name):
-        right_mat, L_inv, source_points = _initialize_tps(U, theta, out_size)
-        output, dest_points = _tps_transform(theta, U, out_size, right_mat, L_inv, source_points)
-        return output, dest_points
+        right_mat, L_inv, source_points = _initialize_tps(U.get_shape().as_list(), num_control_points, out_size)
+        output = _tps_transform(theta, U, out_size, right_mat, L_inv, source_points)
+        return output
 
 def _tps_transform(
         dest_offsets, U, out_size, right_mat, L_inv, source_points):
@@ -270,7 +277,7 @@ def _U_func_numpy(x1, y1, x2, y2):
 
 
 
-def _initialize_tps(U, theta, out_size):
+def _initialize_tps(U_shape, num_control_points, out_size):
     """
     Initializes the thin plate spline calculation by creating the source
     point array and the inverted L matrix used for calculating the
@@ -287,12 +294,7 @@ def _initialize_tps(U, theta, out_size):
     """
 
     # break out input_shape
-    num_batch, height, width, num_channels = U.get_shape().as_list()
-
-    #The number of control points. Must be a
-    #    perfect square. Points will be used to generate an evenly spaced grid.
-    theta = tf.reshape(theta, [num_batch, -1, 2])
-    num_control_points = theta.get_shape().as_list()[1]
+    num_batch, height, width, num_channels = U_shape#U.get_shape().as_list()
 
     # Create source grid
     grid_size = np.sqrt(num_control_points)

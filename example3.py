@@ -37,15 +37,16 @@ for i in range(num_batch-1):
 
 x = tf.placeholder(tf.float32, [None, 1200, 1600, 3])
 x = tf.cast(batch, 'float32')
+n_fc = 16*2
 
 # %% Run session
 with tf.Session() as sess:
   with tf.device("/cpu:0"):
+    stl = TPSTransformer(x.get_shape().as_list(), n_fc/2, out_size)
     # %% Create localisation network and convolutional layer
     with tf.variable_scope('spatial_transformer_0'):
     
         # %% Create a fully-connected layer with 16*2 output nodes
-        n_fc = 16*2
         W_fc1 = tf.Variable(tf.zeros([1200*1600*3, n_fc]), name='W_fc1')
     
         # %% identity transformation
@@ -58,7 +59,6 @@ with tf.Session() as sess:
         b_fc1 = tf.Variable(initial_value=initial, name='b_fc1')
 
         h_fc1 = tf.matmul(tf.zeros([num_batch, 1200*1600*3]), W_fc1) + b_fc1
-        stl = TPSTransformer(x.get_shape().as_list(), n_fc/2, out_size)
         h_trans = stl.transform(x, h_fc1)
 
     # %% Run session

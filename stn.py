@@ -3,54 +3,54 @@ import numpy as np
 
 class AffineTransformer(object):
 
-  """Spatial Affine Transformer Layer
+    """Spatial Affine Transformer Layer
 
-  Implements a spatial transformer layer as described in [1]_.
-  Based on [2]_ and edited by David Dao for Tensorflow.
+    Implements a spatial transformer layer as described in [1]_.
+    Based on [2]_ and edited by David Dao for Tensorflow.
 
 
-  References
-  ----------
-  .. [1]  Spatial Transformer Networks
-          Max Jaderberg, Karen Simonyan, Andrew Zisserman, Koray Kavukcuoglu
-          Submitted on 5 Jun 2015
-  .. [2]  https://github.com/skaae/transformer_network/blob/master/transformerlayer.py
-
-  """
-
-  def __init__(self, U_shape, out_size, name='SpatialAffineTransformer', **kwargs):
-    self.name = name
-    self.num_batch, self.height, self.width, self.num_channels = U_shape
-    self.out_size = out_size
-    self.grid = self._meshgrid()
-  
-  def transform(self, U, theta):
-    """
-    Parameters
+    References
     ----------
-    U : float
-        The output of a convolutional net should have the
-        shape [num_batch, height, width, num_channels].
-    theta: float
-        The output of the
-        localisation network should be [num_batch, 6].
-    out_size: tuple of two ints
-        The size of the output of the spatial network (height, width)
-    Notes
-    -----
-    To initialize the network to the identity transform initialize ``theta`` to :
-        identity = np.array([[1., 0., 0.],
-                             [0., 1., 0.]])
-        identity = identity.flatten()
-        theta = tf.Variable(initial_value=identity)
+    .. [1]  Spatial Transformer Networks
+            Max Jaderberg, Karen Simonyan, Andrew Zisserman, Koray Kavukcuoglu
+            Submitted on 5 Jun 2015
+    .. [2]  https://github.com/skaae/transformer_network/blob/master/transformerlayer.py
 
     """
-    with tf.variable_scope(self.name):
-        output = self._affine_transform(theta, U)
-    return output
+
+    def __init__(self, U_shape, out_size, name='SpatialAffineTransformer', **kwargs):
+        self.name = name
+        self.num_batch, self.height, self.width, self.num_channels = U_shape
+        self.out_size = out_size
+        self.grid = self._meshgrid()
+    
+    def transform(self, U, theta):
+        """
+        Parameters
+        ----------
+        U : float
+            The output of a convolutional net should have the
+            shape [num_batch, height, width, num_channels].
+        theta: float
+            The output of the
+            localisation network should be [num_batch, 6].
+        out_size: tuple of two ints
+            The size of the output of the spatial network (height, width)
+        Notes
+        -----
+        To initialize the network to the identity transform initialize ``theta`` to :
+            identity = np.array([[1., 0., 0.],
+                                 [0., 1., 0.]])
+            identity = identity.flatten()
+            theta = tf.Variable(initial_value=identity)
+
+        """
+        with tf.variable_scope(self.name):
+            output = self._affine_transform(theta, U)
+        return output
 
     def _meshgrid(self):
-        with tf.variable_scope('_meshgrid'):
+        with tf.variable_scope(self.name + '_meshgrid'):
             # This should be equivalent to:
             #  x_t, y_t = np.meshgrid(np.linspace(-1, 1, width),
             #                         np.linspace(-1, 1, height))
@@ -74,7 +74,7 @@ class AffineTransformer(object):
             return grid
     
     def _affine_transform(self, theta, input_dim):
-        with tf.variable_scope('_affine_transform'):
+        with tf.variable_scope(self.name + '_affine_transform'):
             theta = tf.reshape(theta, (-1, 2, 3))
     
             # Transform A x (x_t, y_t, 1)^T -> (x_s, y_s)
@@ -90,7 +90,7 @@ class AffineTransformer(object):
     
             output = tf.reshape(input_transformed, tf.pack([self.num_batch, self.out_size[0], self.out_size[1], self.num_channels]))
             return output
-  
+    
 
 class TPSTransformer(object):
     """Spatial Thin Plate Spline Transformer Layer

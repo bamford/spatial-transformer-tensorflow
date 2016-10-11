@@ -25,13 +25,13 @@ batch = np.append(im, im, axis=0)
 batch = np.append(batch, im, axis=0)
 num_batch = 3
 
-x = tf.placeholder(tf.float32, [None, 5, 5, 1])
+x = tf.placeholder(tf.float32, [num_batch, 5, 5, 1])
 x = tf.cast(batch, 'float32')
 
 # %% Run session
 with tf.Session() as sess:
   with tf.device("/cpu:0"):
-    stl = AffineTransformer()
+    stl = AffineTransformer(x.get_shape().as_list(), out_size)
     # %% Create localisation network and convolutional layer
     with tf.variable_scope('spatial_transformer_0'):
     
@@ -46,7 +46,7 @@ with tf.Session() as sess:
     
         b_fc1 = tf.Variable(initial_value=initial, name='b_fc1')
         h_fc1 = tf.matmul(tf.zeros([num_batch, 5*5*1]), W_fc1) + b_fc1
-        h_trans = stl.transform(x, h_fc1, out_size)
+        h_trans = stl.transform(x, h_fc1)
         h_trans = tf.sigmoid(h_trans)
 
     sess.run(tf.initialize_all_variables())

@@ -54,7 +54,6 @@ with tf.Session() as sess:
 
         initial[5] = -0.2
         initial[7] = -0.1
-        initial[8] = 0.2
     
         b_fc1 = tf.Variable(initial_value=initial, name='b_fc1')
 

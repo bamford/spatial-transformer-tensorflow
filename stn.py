@@ -67,6 +67,7 @@ class AffineTransformer(object):
             ones = tf.ones_like(x_t_flat)
             grid = tf.concat(0, [x_t_flat, y_t_flat, ones])
 
+            # moved tiling here
             grid = tf.expand_dims(grid, 0)
             grid = tf.reshape(grid, [-1])
             grid = tf.tile(grid, tf.pack([self.num_batch]))
@@ -132,7 +133,7 @@ class TPSTransformer(object):
 
         right_mat, self.L_inv, source_points = _initialize_tps(U_shape, self.num_control_points, self.out_size)
 
-        self.source_points = np.tile(source_points, [self.num_batch, 1, 1])
+        self.source_points = tf.tile(tf.expand_dims(source_points, 0), [self.num_batch, 1, 1])
         self.right_mat = tf.tile(tf.expand_dims(right_mat, 0), (self.num_batch, 1, 1))
 
     def transform(self, U, theta, **kwargs):
@@ -158,15 +159,10 @@ class TPSTransformer(object):
     
         # Transform each point on the source grid (image_size x image_size)
         transformed_points = tf.batch_matmul(coefficients, self.right_mat)
-    
-        # TODO this is ugly, but it works!
-        transformed_points = tf.reshape(transformed_points, [self.num_batch, 2, out_width, out_height])
-        transformed_points = tf.transpose(transformed_points, [0, 1, 3, 2])
         transformed_points = tf.reshape(transformed_points, [self.num_batch, 2, out_height*out_width])
     
-        #transformed_points = tf.transpose(transformed_points, [0, 1, 2])
-        y_s_flat = tf.reshape(transformed_points[:,0,:], [-1])
-        x_s_flat = tf.reshape(transformed_points[:,1,:], [-1])
+        x_s_flat = tf.reshape(transformed_points[:,0,:], [-1])
+        y_s_flat = tf.reshape(transformed_points[:,1,:], [-1])
     
         input_transformed = _interpolate(
                 U, x_s_flat, y_s_flat,
@@ -219,7 +215,8 @@ def _initialize_tps(U_shape, num_control_points, out_size):
 
     # Create source grid
     grid_size = np.sqrt(num_control_points)
-    #TODO assert num_control_points is a square of an int
+
+    assert grid_size*grid_size == num_control_points, 'num_control_points must be a square of an int'
 
     x_control_source, y_control_source = np.meshgrid(
         np.linspace(-1, 1, grid_size),
@@ -247,7 +244,6 @@ def _initialize_tps(U_shape, num_control_points, out_size):
     # Loop through each pair of points and create the K matrix
     for point_1 in range(num_control_points):
         for point_2 in range(point_1, num_control_points):
-
             L[point_1 + 3, point_2 + 3] = _U_func_numpy(
                     source_points[0, point_1], source_points[1, point_1],
                     source_points[0, point_2], source_points[1, point_2])
@@ -259,11 +255,9 @@ def _initialize_tps(U_shape, num_control_points, out_size):
     L_inv = np.linalg.inv(L)
 
     # Construct grid
-    x_t, y_t = np.meshgrid(np.linspace(-1, 1, out_size[0]),
-                           np.linspace(-1, 1, out_size[1]))
-    ones = np.ones(np.prod(x_t.shape))
-    orig_grid = np.vstack([x_t.flatten(), y_t.flatten(), ones])
-    orig_grid = orig_grid[0:2, :]
+    x_t, y_t = np.meshgrid(np.linspace(-1, 1, out_size[1]),
+                           np.linspace(-1, 1, out_size[0]))
+    orig_grid = np.vstack([x_t.flatten(), y_t.flatten()])
     orig_grid = orig_grid.astype(np.float32)
 
     # Construct right mat
@@ -272,36 +266,30 @@ def _initialize_tps(U_shape, num_control_points, out_size):
     # point as in ref [2]
     # The U function is simply U(r) = r^2 * log(r^2), where r^2 is the
     # squared distance
-    to_transform = orig_grid[:, :, np.newaxis].transpose(2, 0, 1)
-    stacked_transform = np.tile(to_transform, (num_control_points, 1, 1))
-    stacked_source_points =  source_points[:, :, np.newaxis].transpose(1, 0, 2)
-    r_2 = np.sum((stacked_transform - stacked_source_points) ** 2, axis=1)
+    to_transform = orig_grid[:, :, np.newaxis]
+    stacked_transform = np.tile(to_transform, (1, 1, num_control_points))
+    stacked_source_points =  source_points[:, np.newaxis, :]
+
+    r_2 = np.sum((stacked_transform - stacked_source_points) ** 2, axis=0).transpose()
 
     # Take the product (r^2 * log(r^2)), being careful to avoid NaNs
     log_r_2 = np.log(r_2)
     log_r_2[np.isinf(log_r_2)] = 0.
     distances = r_2 * log_r_2
 
+
     # Add in the coefficients for the affine translation (1, x, and y,
     # corresponding to a_1, a_x, and a_y)
     upper_array = np.ones(shape=(1, orig_grid.shape[1]),
                           dtype=np.float32)
-    upper_array = np.concatenate([upper_array, orig_grid], axis=0)
-    right_mat = np.concatenate([upper_array, distances], axis=0)
 
-    ## Convert to tensors
-    #right_mat = tf.Variable(right_mat, name='right_mat')
-
-    ## Convert to tensors
-    #L_inv = tf.Variable(L_inv, name='L_inv')
-    #source_points = tf.Variable(source_points, name='source_points')
+    right_mat = np.concatenate([upper_array, orig_grid, distances], axis=0)
 
     return right_mat, L_inv, source_points
 
 def _repeat(x, n_repeats):
     with tf.variable_scope('_repeat'):
-        rep = tf.transpose(
-            tf.expand_dims(tf.ones(shape=tf.pack([n_repeats, ])), 1), [1, 0])
+        rep = tf.transpose(tf.expand_dims(tf.ones(shape=tf.pack([n_repeats, ])), 1), [1, 0])
         rep = tf.cast(rep, 'int32')
         x = tf.matmul(tf.reshape(x, (-1, 1)), rep)
         return tf.reshape(x, [-1])

@@ -53,7 +53,7 @@ with tf.Session() as sess:
         initial = np.zeros([n_fc])
         initial = initial.astype('float32')
 
-        initial[5] = -0.2
+        initial[5] = 0.1
         initial[7] = -0.1
     
         b_fc1 = tf.Variable(initial_value=initial, name='b_fc1')

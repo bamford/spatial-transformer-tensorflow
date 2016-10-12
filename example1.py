@@ -30,13 +30,22 @@ im = im.astype('float32')
 out_size = (600, 800)
 
 # %% Simulate batch
-num_batch = 5
+num_batch = 3
 batch = im
 for i in range(num_batch-1):
   batch = np.append(batch, im, axis=0)
+param_dim = 6
 
 x = tf.placeholder(tf.float32, [num_batch, 1200, 1600, 3])
-x = tf.cast(batch, 'float32')
+params = tf.placeholder(tf.float32, [num_batch, param_dim])
+
+# %% Zoom into the image
+initial = np.array([[0.5, 0, 0.0], [0, 0.5, 0.0]])
+initial = initial.astype('float32')
+initial = initial.flatten()
+
+my_params = np.tile(np.reshape(initial, [1, param_dim]), (num_batch, 1))
+my_params = my_params + 0.1*np.random.randn(num_batch, param_dim)
 
 # %% Run session
 with tf.Session() as sess:
@@ -44,24 +53,13 @@ with tf.Session() as sess:
     # %% Create localisation network and convolutional layer
     stl = AffineTransformer(x.get_shape().as_list(), out_size)
     with tf.variable_scope('spatial_transformer_0'):
-    
-        # %% Create a fully-connected layer with 6 output nodes
-        n_fc = 6
-        W_fc1 = tf.Variable(tf.zeros([1200*1600*3, n_fc]), name='W_fc1')
-    
-        # %% Zoom into the image
-        initial = np.array([[1.0, 0, 0.0], [0, 1.0, 0.0]])
-        initial = initial.astype('float32')
-        initial = initial.flatten()
-    
-        b_fc1 = tf.Variable(initial_value=initial, name='b_fc1')
-        h_fc1 = tf.matmul(tf.zeros([num_batch, 1200*1600*3]), W_fc1) + b_fc1
-        h_trans = stl.transform(x, h_fc1)
+        h_trans = stl.transform(x, params)
 
     # %% Run session
     sess.run(tf.initialize_all_variables())
-    y = sess.run(h_trans, feed_dict={x: batch})
+    y = sess.run(h_trans, feed_dict={x: batch, params: my_params})
 
 # save our result
-scipy.misc.imsave('example1_stn.png', y[0])
+for i in range(num_batch):
+  scipy.misc.imsave('example1_stn' + str(i) + '.png', y[i])
 

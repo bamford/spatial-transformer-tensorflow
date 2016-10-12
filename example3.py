@@ -30,7 +30,7 @@ im = im.astype('float32')
 out_size = (600, 800)
 
 # %% Simulate batch
-num_batch = 2
+num_batch = 3
 batch = im
 for i in range(num_batch-1):
   batch = np.append(batch, im, axis=0)
@@ -50,15 +50,10 @@ with tf.Session() as sess:
         W_fc1 = tf.Variable(tf.zeros([1200*1600*3, n_fc]), name='W_fc1')
     
         # %% identity transformation
-        initial = np.zeros([n_fc])
-        initial = initial.astype('float32')
-
-        initial[5] = 0.1
-        initial[7] = -0.1
-    
+        initial = np.zeros([n_fc]).astype('float32')
         b_fc1 = tf.Variable(initial_value=initial, name='b_fc1')
 
-        h_fc1 = tf.matmul(tf.zeros([num_batch, 1200*1600*3]), W_fc1) + b_fc1
+        h_fc1 = tf.matmul(tf.zeros([num_batch, 1200*1600*3]), W_fc1) + b_fc1 + 0.1*tf.random_normal([num_batch, n_fc])
         h_trans = stl.transform(x, h_fc1)
 
     # %% Run session
@@ -66,6 +61,6 @@ with tf.Session() as sess:
     y = sess.run(h_trans, feed_dict={x: batch})
 
 # save our result
-img = y[0]
-scipy.misc.imsave('example3_stn.png', img)
+for i in range(num_batch):
+  scipy.misc.imsave('example3_stn' + str(i) + '.png', y[i])
 

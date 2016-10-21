@@ -127,7 +127,7 @@ class TPSTransformer(object):
             The size of the output of the spatial network (height, width)
         """
         self.num_control_points = int(num_control_points)
-        _, self.height, self.width, self.num_channels = U_shape
+        _, self.height, self.width, _ = U_shape
         self.out_size = out_size
         self.name = name
 
@@ -143,6 +143,7 @@ class TPSTransformer(object):
         return output
 
     def _tps_transform(self, theta, U):
+        print(U)
         num_batch = U.get_shape().as_list()[0]
         source_points = tf.tile(tf.expand_dims(self.source_points, 0), [num_batch, 1, 1])
         right_mat = tf.tile(tf.expand_dims(self.right_mat, 0), (num_batch, 1, 1))
@@ -171,7 +172,7 @@ class TPSTransformer(object):
                 U, x_s_flat, y_s_flat,
                 self.out_size)
         
-        output = tf.reshape(input_transformed, [-1, out_height, out_width, self.num_channels])
+        output = tf.reshape(input_transformed, [num_batch, out_height, out_width, -1])
         return output
 
 
@@ -214,7 +215,7 @@ def _initialize_tps(U_shape, num_control_points, out_size):
     """
 
     # break out input_shape
-    _, height, width, num_channels = U_shape#U.get_shape().as_list()
+    _, height, width, _ = U_shape#U.get_shape().as_list()
 
     # Create source grid
     grid_size = np.sqrt(num_control_points)

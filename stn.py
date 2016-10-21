@@ -127,14 +127,12 @@ class TPSTransformer(object):
             The size of the output of the spatial network (height, width)
         """
         self.num_control_points = int(num_control_points)
-        self.num_batch, self.height, self.width, self.num_channels = U_shape
+        _, self.height, self.width, self.num_channels = U_shape
         self.out_size = out_size
         self.name = name
 
-        right_mat, self.L_inv, source_points = _initialize_tps(U_shape, self.num_control_points, self.out_size)
+        self.right_mat, self.L_inv, self.source_points = _initialize_tps(U_shape, self.num_control_points, self.out_size)
 
-        self.source_points = tf.tile(tf.expand_dims(source_points, 0), [self.num_batch, 1, 1])
-        self.right_mat = tf.tile(tf.expand_dims(right_mat, 0), (self.num_batch, 1, 1))
 
     def transform(self, U, theta, **kwargs):
         #The number of control points. Must be a
@@ -145,21 +143,26 @@ class TPSTransformer(object):
         return output
 
     def _tps_transform(self, theta, U):
+        num_batch = U.get_shape().as_list()[0]
+        source_points = tf.tile(tf.expand_dims(self.source_points, 0), [num_batch, 1, 1])
+        right_mat = tf.tile(tf.expand_dims(self.right_mat, 0), (num_batch, 1, 1))
+
         out_height = self.out_size[0]
         out_width = self.out_size[1]
     
         # reshape destination offsets to be (num_batch, 2, num_control_points)
         # and add to source_points
-        theta = self.source_points + tf.reshape(theta, tf.pack([self.num_batch, 2, self.num_control_points]))
+        theta = source_points + tf.reshape(theta, tf.pack([-1, 2, self.num_control_points]))
     
         # Solve as in ref [2]
-        theta = tf.reshape(theta, [self.num_batch*2, self.num_control_points])
+        theta = tf.reshape(theta, [-1, self.num_control_points])
         coefficients = tf.matmul(theta, tf.transpose(self.L_inv[:, 3:]))
-        coefficients = tf.reshape(coefficients, [self.num_batch, 2, -1])
+        coefficients = tf.reshape(coefficients, [-1, 2, self.num_control_points+3])
+        print(coefficients)
     
         # Transform each point on the source grid (image_size x image_size)
-        transformed_points = tf.batch_matmul(coefficients, self.right_mat)
-        transformed_points = tf.reshape(transformed_points, [self.num_batch, 2, out_height*out_width])
+        transformed_points = tf.batch_matmul(coefficients, right_mat)
+        transformed_points = tf.reshape(transformed_points, [-1, 2, out_height*out_width])
     
         x_s_flat = tf.reshape(transformed_points[:,0,:], [-1])
         y_s_flat = tf.reshape(transformed_points[:,1,:], [-1])
@@ -168,7 +171,7 @@ class TPSTransformer(object):
                 U, x_s_flat, y_s_flat,
                 self.out_size)
         
-        output = tf.reshape(input_transformed, tf.pack([self.num_batch, out_height, out_width, self.num_channels]))
+        output = tf.reshape(input_transformed, [-1, out_height, out_width, self.num_channels])
         return output
 
 
@@ -211,7 +214,7 @@ def _initialize_tps(U_shape, num_control_points, out_size):
     """
 
     # break out input_shape
-    num_batch, height, width, num_channels = U_shape#U.get_shape().as_list()
+    _, height, width, num_channels = U_shape#U.get_shape().as_list()
 
     # Create source grid
     grid_size = np.sqrt(num_control_points)

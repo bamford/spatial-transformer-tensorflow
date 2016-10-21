@@ -89,7 +89,7 @@ class AffineTransformer(object):
                 input_dim, x_s_flat, y_s_flat,
                 self.out_size)
     
-            output = tf.reshape(input_transformed, tf.pack([self.num_batch, self.out_size[0], self.out_size[1], self.num_channels]))
+            output = tf.reshape(input_transformed, [self.num_batch, self.out_size[0], self.out_size[1], self.num_channels])
             return output
     
 
@@ -143,7 +143,7 @@ class TPSTransformer(object):
         return output
 
     def _tps_transform(self, theta, U):
-        print(U)
+        #print(U)
         num_batch = U.get_shape().as_list()[0]
         source_points = tf.tile(tf.expand_dims(self.source_points, 0), [num_batch, 1, 1])
         right_mat = tf.tile(tf.expand_dims(self.right_mat, 0), (num_batch, 1, 1))
@@ -157,9 +157,10 @@ class TPSTransformer(object):
     
         # Solve as in ref [2]
         theta = tf.reshape(theta, [-1, self.num_control_points])
-        coefficients = tf.matmul(theta, tf.transpose(self.L_inv[:, 3:]))
+        #coefficients = tf.matmul(theta, tf.transpose(self.L_inv[:, 3:]))
+        coefficients = tf.matmul(theta, tf.transpose(self.L_inv))
         coefficients = tf.reshape(coefficients, [-1, 2, self.num_control_points+3])
-        print(coefficients)
+        #print(coefficients)
     
         # Transform each point on the source grid (image_size x image_size)
         transformed_points = tf.batch_matmul(coefficients, right_mat)
@@ -173,6 +174,7 @@ class TPSTransformer(object):
                 self.out_size)
         
         output = tf.reshape(input_transformed, [num_batch, out_height, out_width, -1])
+        print("reshaped")
         return output
 
 
@@ -289,7 +291,7 @@ def _initialize_tps(U_shape, num_control_points, out_size):
 
     right_mat = np.concatenate([upper_array, orig_grid, distances], axis=0)
 
-    return right_mat, L_inv, source_points
+    return right_mat, L_inv[:,3:], source_points
 
 def _repeat(x, n_repeats):
     with tf.variable_scope('_repeat'):

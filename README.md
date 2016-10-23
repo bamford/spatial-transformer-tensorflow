@@ -54,32 +54,32 @@ stl2.transform(U, theta)
 #### Parameters
 ##### Affine Transformation
     theta : float   
-        The output of the
-        localisation network should be [num_batch, 6].
+        The output of the localisation network,
+        should have size [num_batch, 6].
 
     Notes:
     To initialize the network to the identity transform init ``theta`` to :
     
-    ```python
-    identity = np.array([[1., 0., 0.],
-                        [0., 1., 0.]]) 
-    identity = identity.flatten()
-    theta = tf.Variable(initial_value=identity)
-    ```        
+```python
+identity = np.array([[1., 0., 0.],
+                    [0., 1., 0.]]) 
+identity = identity.flatten()
+theta = tf.Variable(initial_value=identity)
+```        
 
 ##### Thin Plate Splines STN
     theta : float   
-        The output of the
-        localisation network should be [num_batch, num_control_points x 2].
+        The output of the localisation network,
+        should have size [num_batch, num_control_points x 2].
         num_control_points must be a square of an integer.
         
     Notes:
     To initialize the network to the identity transform init ``theta`` to zeros:
 
-    ```python
-    identity = np.zeros(num_control_points,2).astype('float32')
-    theta = tf.Variable(initial_value=identity)
-    ```        
+```python
+identity = np.zeros(num_control_points,2).astype('float32')
+theta = tf.Variable(initial_value=identity)
+```        
 
 ### References
 

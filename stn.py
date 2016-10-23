@@ -174,7 +174,6 @@ class TPSTransformer(object):
                 self.out_size)
         
         output = tf.reshape(input_transformed, [num_batch, out_height, out_width, -1])
-        print("reshaped")
         return output
 
 

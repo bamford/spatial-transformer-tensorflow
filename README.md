@@ -17,44 +17,27 @@ This tensorflow implementation supports Affine Transformations and Thin Plate Sp
 
 ## How to use
 
-### Create Layer
+### Affine Transformation
 
 ```python
 from stn import AffineTransformer
+
+# Initialize
 out_size = [300, 300]
 stl1 = AffineTransformer(out_size)
-```
 
-```python
-from stn import TPSTransformer
-out_size = [300, 300]
-num_control_points = 16 
-stl2 = TPSTransformer(out_size, num_control_points)
+# Transform 
+stl1.transform(U, theta)
 ```
 
 #### Parameters
     out_size : tuple of two ints
         The size of the output of the network
-    num_control_points : int
-        The number of control points that define 
-        Thin Plate Splines deformation field. 
-        *MUST* be a square of an integer. 
-        16 by default.
-
-### Transform Input Tensor
-
-```python
-stl1.transform(U, theta)
-stl2.transform(U, theta)
-```
-
-#### Parameters
 
     U : float 
         The output of a convolutional net should have the
         shape [num_batch, height, width, num_channels]. 
 
-##### Affine Transformation
     theta : float   
         The output of the localisation network,
         should have size [num_batch, 6].
@@ -67,7 +50,34 @@ identity = identity.flatten()
 theta = tf.Variable(initial_value=identity)
 ```        
 
-##### Thin Plate Splines STN
+### Thin Plate Splines STN
+
+```python
+from stn import TPSTransformer
+
+# Initialize
+out_size = [300, 300]
+num_control_points = 16 
+stl2 = TPSTransformer(out_size, num_control_points)
+
+# Transform 
+stl2.transform(U, theta)
+```
+
+#### Parameters
+    out_size : tuple of two ints
+        The size of the output of the network
+
+    num_control_points : int
+        The number of control points that define 
+        Thin Plate Splines deformation field. 
+        *MUST* be a square of an integer. 
+        16 by default.
+
+    U : float 
+        The output of a convolutional net should have the
+        shape [num_batch, height, width, num_channels]. 
+
     theta : float   
         The output of the localisation network,
         should have size [num_batch, num_control_points x 2].

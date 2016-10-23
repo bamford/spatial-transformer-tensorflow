@@ -6,9 +6,9 @@ The Spatial Transformer Network [1] allows the spatial manipulation of data with
   <img width="600px" src="http://i.imgur.com/ExGDVul.png"><br><br>
 </div>
 
-A Spatial Transformer Network implemented in Tensorflow 0.9 and based on [2] \(which is also in [3]\), and [4].
+A Spatial Transformer Network implemented in Tensorflow 0.9 and based on [2] \(which is also in [3]\), [4] and [5].
 
-This tensorflow implementation supports Affine Transformations and Thin Plate Spline Deformations [5].
+This tensorflow implementation supports Affine Transformations and Thin Plate Spline Deformations [6].
 
 
 <div align="center">
@@ -89,18 +89,28 @@ identity = np.zeros(num_control_points,2).astype('float32')
 theta = tf.Variable(initial_value=identity)
 ```        
 
-### References
+## Examples 
+
+example1.py shows how to use AffineTransformer.
+
+example2.py shows that interpolation doesn't have the bug at the edges, as in [2] and [3]. See https://github.com/tensorflow/models/issues/193 for details.
+
+example3.py shows how to use TPSTransformer.
+
+## References
 
 [1] Jaderberg, Max, et al. "Spatial Transformer Networks." 
     arXiv preprint arXiv:1506.02025 (2015)
 
-[2] https://github.com/skaae/transformer_network/blob/master/transformerlayer.py
+[2] https://github.com/tensorflow/models/tree/master/transformer/transformerlayer.py
 
-[3] https://github.com/tensorflow/models/tree/master/transformer/transformerlayer.py
+[3] https://github.com/daviddao/spatial-transformer-tensorflow
 
-[4] https://github.com/Lasagne/Lasagne/blob/master/lasagne/layers/special.py
+[4] https://github.com/skaae/transformer_network/blob/master/transformerlayer.py
 
-[5] Fred L. Bookstein. "Principal warps: thin-plate splines and the decomposition of deformations."
+[5] https://github.com/Lasagne/Lasagne/blob/master/lasagne/layers/special.py
+
+[6] Fred L. Bookstein. "Principal warps: thin-plate splines and the decomposition of deformations."
     IEEE Transactions on Pattern Analysis and Machine Intelligence. (1989)
     http://doi.org/10.1109/34.24792
 

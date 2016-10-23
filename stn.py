@@ -6,17 +6,22 @@ Implementation of Spatial Transformer Networks
 
 References
 ----------
-.. [1]  Spatial Transformer Networks
-        Max Jaderberg, Karen Simonyan, Andrew Zisserman, Koray Kavukcuoglu
-        Submitted on 5 Jun 2015
-.. [2]  https://github.com/skaae/transformer_network/blob/master/transformerlayer.py
-.. [3]  https://github.com/tensorflow/models/tree/master/transformer/transformerlayer.py
-.. [4]  https://github.com/Lasagne/Lasagne/blob/master/lasagne/layers/special.py
-.. [5]  Fred L. Bookstein (1989):
-        Principal warps: thin-plate splines and the decomposition of
-        deformations. IEEE Transactions on
-        Pattern Analysis and Machine Intelligence.
-        http://doi.org/10.1109/34.24792
+[1] Spatial Transformer Networks
+    Max Jaderberg, Karen Simonyan, Andrew Zisserman, Koray Kavukcuoglu
+    Submitted on 5 Jun 2015
+
+[2] https://github.com/tensorflow/models/tree/master/transformer/transformerlayer.py
+
+[3] https://github.com/daviddao/spatial-transformer-tensorflow
+
+[4] https://github.com/skaae/transformer_network/blob/master/transformerlayer.py
+
+[5] https://github.com/Lasagne/Lasagne/blob/master/lasagne/layers/special.py
+
+[6]  Fred L. Bookstein (1989):
+     Principal warps: thin-plate splines and the decomposition of deformations. 
+     IEEE Transactions on Pattern Analysis and Machine Intelligence.
+     http://doi.org/10.1109/34.24792
 
 """
 
@@ -24,7 +29,7 @@ class AffineTransformer(object):
     """Spatial Affine Transformer Layer
 
     Implements a spatial transformer layer as described in [1]_.
-    Based on [1]_, [2]_ and [3]_. Edited by Daniyar Turmukhambetov.
+    Based on [2]_ and [3]_. Edited by Daniyar Turmukhambetov.
 
     """
 
@@ -125,7 +130,7 @@ class TPSTransformer(object):
     """Spatial Thin Plate Spline Transformer Layer
 
     Implements a spatial transformer layer as described in [1]_.
-    Based on [4]_ and edited by Daniyar Turmukhambetov.
+    Based on [4]_ and [5]_. Edited by Daniyar Turmukhambetov.
 
     """
 

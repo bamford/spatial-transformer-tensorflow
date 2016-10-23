@@ -53,7 +53,7 @@ stl2.transform(U, theta)
 
 #### Parameters
 ##### Affine Transformation
-    theta: float   
+    theta : float   
         The output of the
         localisation network should be [num_batch, 6].
 
@@ -68,7 +68,7 @@ stl2.transform(U, theta)
     ```        
 
 ##### Thin Plate Splines STN
-    theta: float   
+    theta : float   
         The output of the
         localisation network should be [num_batch, num_control_points x 2].
         num_control_points must be a square of an integer.

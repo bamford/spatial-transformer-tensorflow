@@ -33,9 +33,6 @@ stl2 = TPSTransformer(out_size, num_control_points)
 ```
 
 #### Parameters
-    U : float 
-        The output of a convolutional net should have the
-        shape [num_batch, height, width, num_channels]. 
     out_size : tuple of two ints
         The size of the output of the network
     num_control_points : int
@@ -52,6 +49,11 @@ stl2.transform(U, theta)
 ```
 
 #### Parameters
+
+    U : float 
+        The output of a convolutional net should have the
+        shape [num_batch, height, width, num_channels]. 
+
 ##### Affine Transformation
     theta : float   
         The output of the localisation network,

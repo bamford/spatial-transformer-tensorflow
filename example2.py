@@ -31,7 +31,7 @@ x = tf.cast(batch, 'float32')
 # %% Run session
 with tf.Session() as sess:
   with tf.device("/cpu:0"):
-    stl = AffineTransformer(x.get_shape().as_list(), out_size)
+    stl = AffineTransformer(out_size)
     # %% Create localisation network and convolutional layer
     with tf.variable_scope('spatial_transformer_0'):
     

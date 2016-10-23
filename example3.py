@@ -42,7 +42,7 @@ n_fc = 16*2
 # %% Run session
 with tf.Session() as sess:
   with tf.device("/cpu:0"):
-    stl = TPSTransformer(x.get_shape().as_list(), n_fc/2, out_size)
+    stl = TPSTransformer(out_size, n_fc/2)
     # %% Create localisation network and convolutional layer
     with tf.variable_scope('spatial_transformer_0'):
     

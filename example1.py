@@ -26,9 +26,6 @@ im = im / 255.
 im = im.reshape(1, 1200, 1600, 3)
 im = im.astype('float32')
 
-# %% Let the output size of the affine transformer be half the image size.
-out_size = (600, 800)
-
 # %% Simulate batch
 num_batch = 3
 batch = im
@@ -44,6 +41,7 @@ initial = np.array([[0.5, 0, 0.0], [0, 0.5, 0.0]])
 initial = initial.astype('float32')
 initial = initial.flatten()
 
+# Random jitter of the zooming parameters
 my_params = np.tile(np.reshape(initial, [1, param_dim]), (num_batch, 1))
 my_params = my_params + 0.1*np.random.randn(num_batch, param_dim)
 
@@ -51,7 +49,10 @@ my_params = my_params + 0.1*np.random.randn(num_batch, param_dim)
 with tf.Session() as sess:
   with tf.device("/cpu:0"):
     # %% Create localisation network and convolutional layer
-    stl = AffineTransformer(x.get_shape().as_list(), out_size)
+
+    # %% Let the output size of the affine transformer be half the image size.
+    stl = AffineTransformer((600, 800))
+
     with tf.variable_scope('spatial_transformer_0'):
         h_trans = stl.transform(x, params)
 

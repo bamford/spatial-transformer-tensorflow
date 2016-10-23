@@ -15,7 +15,14 @@ This tensorflow implementation supports Affine Transformations and Thin Plate Sp
   <img src="http://i.imgur.com/gfqLV3f.png"><br><br>
 </div>
 
-### How to use
+## How to use
+
+
+### Create Layer
+```python
+input_size = [-1, ]
+stl = AffineTransformer(x.get_shape().as_list(), out_size)
+```
 
 #### Affine STN
 For spatial transformer network with affine transformations:

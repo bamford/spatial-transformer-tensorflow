@@ -6,9 +6,9 @@ The Spatial Transformer Network [1] allows the spatial manipulation of data with
   <img width="600px" src="http://i.imgur.com/ExGDVul.png"><br><br>
 </div>
 
-A Spatial Transformer Network implemented in Tensorflow 0.9 and based on [2] \(which is also in [3]\), [4] and [5].
+A Spatial Transformer Network implemented in Tensorflow 0.9 and based on [2] \(which is also in [3]\), and [4].
 
-This tensorflow implementation supports Affine Transformations and Thin Plate Spline Deformations.
+This tensorflow implementation supports Affine Transformations and Thin Plate Spline Deformations [5].
 
 
 <div align="center">
@@ -20,12 +20,29 @@ This tensorflow implementation supports Affine Transformations and Thin Plate Sp
 ### Create Layer
 
 ```python
+from stn import AffineTransformer
 out_size = [300, 300]
 stl1 = AffineTransformer(out_size)
+```
 
+```python
+from stn import TPSTransformer
+out_size = [300, 300]
 num_control_points = 16 
 stl2 = TPSTransformer(out_size, num_control_points)
 ```
+
+#### Parameters
+    U : float 
+        The output of a convolutional net should have the
+        shape [num_batch, height, width, num_channels]. 
+    out_size : tuple of two ints
+        The size of the output of the network
+    num_control_points : int
+        The number of control points that define 
+        Thin Plate Splines deformation field. 
+        *MUST* be a square of an integer. 
+        16 by default.
 
 ### Transform Input Tensor
 
@@ -34,14 +51,8 @@ stl1.transform(U, theta)
 stl2.transform(U, theta)
 ```
 
-### Parameters
-    U : float 
-        The output of a convolutional net should have the
-        shape [num_batch, height, width, num_channels]. 
-    out_size: tuple of two ints
-        The size of the output of the network
-
-#### Affine Transformation
+#### Parameters
+##### Affine Transformation
     theta: float   
         The output of the
         localisation network should be [num_batch, 6].
@@ -56,7 +67,7 @@ stl2.transform(U, theta)
     theta = tf.Variable(initial_value=identity)
     ```        
 
-#### Thin Plate Splines STN
+##### Thin Plate Splines STN
     theta: float   
         The output of the
         localisation network should be [num_batch, num_control_points x 2].

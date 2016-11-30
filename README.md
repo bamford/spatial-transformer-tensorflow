@@ -34,10 +34,18 @@ stl3.transform(U, theta3)
 
 
 ## Examples 
+### Input 
+<div align="center">
+  <img src="imgs/src.png">
+</div>
 
+### AffineTransformer
 example_affine.py shows how to use AffineTransformer.
 <div align="center">
   <img src="imgs/affine0.png">
+  <img src="imgs/affine1.png">
+  <img src="imgs/affine2.png">
+  <img src="imgs/affine3.png">
 </div>
 
 example_project.py shows how to use ProjectiveTransformer.

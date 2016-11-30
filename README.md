@@ -3,7 +3,7 @@
 The Spatial Transformer Network [1] allows the spatial manipulation of data within the network.
 
 <div align="center">
-  <img width="600px" src="http://i.imgur.com/ExGDVul.png"><br><br>
+  <img width="600px" src="imgs/teaser.png"><br>
 </div>
 
 A Spatial Transformer Network implemented in Tensorflow 0.9 and based on [2] \(which is also in [3]\), [4] and [5].
@@ -12,7 +12,7 @@ This tensorflow implementation supports Affine, Projective and Elastic (Thin Pla
 
 
 <div align="center">
-  <img src="http://i.imgur.com/gfqLV3f.png"><br><br>
+  <img src="imgs/pipeline.png"><br>
 </div>
 
 ## How to use
@@ -36,6 +36,9 @@ stl3.transform(U, theta3)
 ## Examples 
 
 example_affine.py shows how to use AffineTransformer.
+<div align="center">
+  <img src="imgs/affine0.png">
+</div>
 
 example_project.py shows how to use ProjectiveTransformer.
 

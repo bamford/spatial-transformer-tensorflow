@@ -1,5 +1,3 @@
-import tensorflow as tf
-
 """
 Implementation of Spatial Transformer Networks
 
@@ -23,6 +21,9 @@ References
      http://doi.org/10.1109/34.24792
 
 """
+
+import tensorflow as tf
+
 
 class AffineTransformer(object):
     """Spatial Affine Transformer Layer
@@ -496,4 +497,3 @@ def _interpolate(im, x, y, out_size):
         wd = tf.expand_dims(((x-x0_f) * (y-y0_f)), 1)
         output = tf.add_n([wa*Ia, wb*Ib, wc*Ic, wd*Id])
         return output
-

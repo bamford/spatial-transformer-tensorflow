@@ -25,6 +25,17 @@ References
 import tensorflow as tf
 
 
+"""
+Legacy Function
+
+"""
+def transformer(U, theta, out_size, name='SpatialTransformer', **kwargs):
+    with tf.variable_scope(name):
+        stl = AffineTransformer(out_size)
+        output = stl.transform(U, theta, out_size)
+        return output
+
+
 class AffineTransformer(object):
     """Spatial Affine Transformer Layer
 
@@ -74,13 +85,13 @@ class AffineTransformer(object):
 
         """
         with tf.variable_scope(self.name):
-            output = self._transform(theta, U)
+            output = self._transform(U, theta)
 
         return output
 
 
     
-    def _transform(self, theta, U):
+    def _transform(self, U, theta):
         with tf.variable_scope(self.name + '_affine_transform'):
             batch_size, _, _, num_channels = U.get_shape().as_list()
             theta = tf.reshape(theta, (-1, 2, 3))
@@ -151,13 +162,13 @@ class ProjectiveTransformer(object):
 
         """
         with tf.variable_scope(self.name):
-            output = self._transform(theta, U)
+            output = self._transform(U, theta)
 
         return output
 
 
     
-    def _transform(self, theta, U):
+    def _transform(self, U, theta):
         with tf.variable_scope(self.name + '_projective_transform'):
             batch_size, _, _, num_channels = U.get_shape().as_list()
             theta = tf.reshape(theta, (batch_size, 8))
@@ -242,10 +253,10 @@ class ElasticTransformer(object):
 
         """
         with tf.variable_scope(self.name):
-            output = self._transform(theta, U)
+            output = self._transform(U, theta)
         return output
 
-    def _transform(self, theta, U):
+    def _transform(self, U, theta):
         with tf.variable_scope(self.name + '_transform'):
             batch_size = U.get_shape().as_list()[0]
             source_points = tf.tile(tf.expand_dims(self.source_points, 0), [batch_size, 1, 1])

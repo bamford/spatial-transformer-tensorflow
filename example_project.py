@@ -14,7 +14,7 @@
 # ==============================================================================
 from scipy import ndimage
 import tensorflow as tf
-from stn import ProjectiveTransformer
+from spatial_transformer import ProjectiveTransformer
 import numpy as np
 import scipy.misc
 

@@ -1,6 +1,6 @@
 from scipy import ndimage
 import tensorflow as tf
-from stn import AffineTransformer
+from spatial_transformer import AffineTransformer
 import numpy as np
 import matplotlib.pyplot as plt
 

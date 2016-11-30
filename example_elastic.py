@@ -14,7 +14,7 @@
 # ==============================================================================
 from scipy import ndimage
 import tensorflow as tf
-from stn import ElasticTransformer
+from spatial_transformer import ElasticTransformer
 import numpy as np
 import scipy.misc
 

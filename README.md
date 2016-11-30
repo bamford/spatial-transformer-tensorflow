@@ -40,7 +40,7 @@ stl3.transform(U, theta3)
 </div>
 
 ### AffineTransformer
-example_affine.py shows how to use AffineTransformer.
+example_affine.py shows how to use AffineTransformer. Note, affine transformations preserve parallel lines.
 <div align="center">
   <img src="imgs/affine0.png">
   <img src="imgs/affine1.png">
@@ -48,9 +48,23 @@ example_affine.py shows how to use AffineTransformer.
   <img src="imgs/affine3.png">
 </div>
 
-example_project.py shows how to use ProjectiveTransformer.
+### ProjectiveTransformer
+example_project.py shows how to use ProjectiveTransformer. Note, parallel lines are not parallel after transformation.
+<div align="center">
+  <img src="imgs/projective0.png">
+  <img src="imgs/projective1.png">
+  <img src="imgs/projective2.png">
+  <img src="imgs/projective3.png">
+</div>
 
-example_elastic.py shows how to use ElasticTransformer.
+### ElasticTransformer
+example_elastic.py shows how to use ElasticTransformer. Here, deformations are defined with Thin Plate Splines on a 4x4 grid of control points.
+<div align="center">
+  <img src="imgs/elastic0.png">
+  <img src="imgs/elastic1.png">
+  <img src="imgs/elastic2.png">
+  <img src="imgs/elastic3.png">
+</div>
 
 example_interp.py shows that interpolation doesn't have the bug at the edges, as in [2] and [3]. See https://github.com/tensorflow/models/issues/193 for details.
 

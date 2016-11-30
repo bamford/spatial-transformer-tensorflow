@@ -17,31 +17,19 @@ This tensorflow implementation supports Affine, Projective and Elastic (Thin Pla
 
 ## How to use
 
-### Affine Transformation
-
 ```python
-from stn import AffineTransformer
+from stn import AffineTransformer, ProjectiveTransformer, ElasticTransformer
 
 # Initialize
 outsize = [300, 300]
 stl1 = AffineTransformer(outsize)
+stl2 = ProjectiveTransformer(outsize)
+stl3 = ElasticTransformer(outsize)
 
 # Transform 
-stl1.transform(U, theta)
-```
-
-
-### Elastic Transformation
-
-```python
-from stn import ElasticTransformer
-
-# Initialize
-outsize = [300, 300]
-stl2 = TPSTransformer(outsize)
-
-# Transform 
-stl2.transform(U, theta)
+stl1.transform(U, theta1)
+stl2.transform(U, theta2)
+stl3.transform(U, theta3)
 ```
 
 

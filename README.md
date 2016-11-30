@@ -26,9 +26,9 @@ stl2 = ProjectiveTransformer(outsize)
 stl3 = ElasticTransformer(outsize)
 
 # Transform 
-stl1.transform(U, theta1)
-stl2.transform(U, theta2)
-stl3.transform(U, theta3)
+y1 = stl1.transform(U, theta1)
+y2 = stl2.transform(U, theta2)
+y3 = stl3.transform(U, theta3)
 ```
 
 

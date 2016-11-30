@@ -1,6 +1,8 @@
 import tensorflow as tf
 import numpy as np
+import math
 
+import math
 """
 Implementation of Spatial Transformer Networks
 
@@ -56,11 +58,11 @@ class AffineTransformer(object):
         ----------
         U : float
             The input tensor should have the shape 
-            [num_batch, height, width, num_channels].
+            [batch_size, height, width, num_channels].
         theta: float
             The output of the localisation network
             should have the shape
-            [num_batch, 6].
+            [batch_size, 6].
         Notes
         -----
         To initialize the network to the identity transform initialize ``theta`` to :
@@ -105,11 +107,11 @@ class AffineTransformer(object):
     
     def _affine_transform(self, theta, U):
         with tf.variable_scope(self.name + '_affine_transform'):
-            num_batch, _, _, num_channels = U.get_shape().as_list()
+            batch_size, _, _, num_channels = U.get_shape().as_list()
             theta = tf.reshape(theta, (-1, 2, 3))
 
-            grid = tf.tile(self.grid, tf.pack([num_batch]))
-            grid = tf.reshape(grid, [num_batch, 3, -1])
+            grid = tf.tile(self.grid, tf.pack([batch_size]))
+            grid = tf.reshape(grid, [batch_size, 3, -1])
     
             # Transform A x (x_t, y_t, 1)^T -> (x_s, y_s)
             T_g = tf.batch_matmul(theta, grid)
@@ -122,7 +124,7 @@ class AffineTransformer(object):
                 U, x_s_flat, y_s_flat,
                 self.out_size)
     
-            output = tf.reshape(input_transformed, [num_batch, self.out_size[0], self.out_size[1], num_channels])
+            output = tf.reshape(input_transformed, [batch_size, self.out_size[0], self.out_size[1], num_channels])
             return output
     
 
@@ -162,9 +164,9 @@ class TPSTransformer(object):
         ----------
         U : float
             The input tensor should have the shape 
-            [num_batch, height, width, num_channels].
+            [batch_size, height, width, num_channels].
         theta: float 
-            Should have the shape of [num_batch, self.num_control_points x 2]
+            Should have the shape of [batch_size, self.num_control_points x 2]
             Theta is the output of the localisation network, so it is 
             the x and y offsets of the destination coordinates 
             of each of the control points.
@@ -182,14 +184,14 @@ class TPSTransformer(object):
 
     def _tps_transform(self, theta, U):
         with tf.variable_scope(self.name + '_tps_transform'):
-            num_batch = U.get_shape().as_list()[0]
-            source_points = tf.tile(tf.expand_dims(self.source_points, 0), [num_batch, 1, 1])
-            right_mat = tf.tile(tf.expand_dims(self.right_mat, 0), (num_batch, 1, 1))
+            batch_size = U.get_shape().as_list()[0]
+            source_points = tf.tile(tf.expand_dims(self.source_points, 0), [batch_size, 1, 1])
+            right_mat = tf.tile(tf.expand_dims(self.right_mat, 0), (batch_size, 1, 1))
 
             out_height = self.out_size[0]
             out_width = self.out_size[1]
     
-            # reshape destination offsets to be (num_batch, 2, num_control_points)
+            # reshape destination offsets to be (batch_size, 2, num_control_points)
             # and add to source_points
             theta = source_points + tf.reshape(theta, tf.pack([-1, 2, self.num_control_points]))
     
@@ -211,7 +213,7 @@ class TPSTransformer(object):
                     U, x_s_flat, y_s_flat,
                     self.out_size)
             
-            output = tf.reshape(input_transformed, [num_batch, out_height, out_width, -1])
+            output = tf.reshape(input_transformed, [batch_size, out_height, out_width, -1])
             return output
 
 
@@ -233,7 +235,7 @@ class TPSTransformer(object):
         """
     
         # Create source grid
-        grid_size = np.sqrt(self.num_control_points)
+        grid_size = math.sqrt(self.num_control_points)
         assert grid_size*grid_size == self.num_control_points, 'num_control_points must be a square of an int'
     
         # Create 2 x num_points array of source points
@@ -357,13 +359,10 @@ def _repeat(x, n_repeats):
 def _interpolate(im, x, y, out_size):
     with tf.variable_scope('_interpolate'):
         # constants
-        num_batch = tf.shape(im)[0]
+        batch_size = tf.shape(im)[0]
         height = tf.shape(im)[1]
         width = tf.shape(im)[2]
         channels = tf.shape(im)[3]
-
-        max_y = tf.cast(tf.shape(im)[1] - 1, 'int32')
-        max_x = tf.cast(tf.shape(im)[2] - 1, 'int32')
 
         x = tf.cast(x, 'float32')
         y = tf.cast(y, 'float32')
@@ -376,24 +375,23 @@ def _interpolate(im, x, y, out_size):
         # scale indices from [-1, 1] to [0, width/height - 1]
         x = tf.clip_by_value(x, -1, 1)
         y = tf.clip_by_value(y, -1, 1)
-
-        x = (x + 1.0) / 2.0 * (width_f-1.001)
-        y = (y + 1.0) / 2.0 * (height_f-1.001)
+        x = (x + 1.0) / 2.0 * (width_f-1.0)
+        y = (y + 1.0) / 2.0 * (height_f-1.0)
 
         # do sampling
-        x0 = tf.cast(tf.floor(x), 'int32')
-        x1 = x0 + 1
-        y0 = tf.cast(tf.floor(y), 'int32')
-        y1 = y0 + 1
+        x0_f = tf.floor(x)
+        y0_f = tf.floor(y)
+        x1_f = x0_f + 1
+        y1_f = y0_f + 1
 
-        x0 = tf.clip_by_value(x0, zero, max_x)
-        x1 = tf.clip_by_value(x1, zero, max_x)
-        y0 = tf.clip_by_value(y0, zero, max_y)
-        y1 = tf.clip_by_value(y1, zero, max_y)
+        x0 = tf.cast(x0_f, 'int32')
+        y0 = tf.cast(y0_f, 'int32')
+        x1 = tf.cast(tf.minimum(x1_f, width_f - 1), 'int32')
+        y1 = tf.cast(tf.minimum(y1_f, height_f - 1), 'int32')
 
         dim2 = width
         dim1 = width*height
-        base = _repeat(tf.range(num_batch)*dim1, out_height*out_width)
+        base = _repeat(tf.range(batch_size)*dim1, out_height*out_width)
         base_y0 = base + y0*dim2
         base_y1 = base + y1*dim2
         idx_a = base_y0 + x0
@@ -404,17 +402,12 @@ def _interpolate(im, x, y, out_size):
         # use indices to lookup pixels in the flat image and restore
         # channels dim
         im_flat = tf.reshape(im, tf.pack([-1, channels]))
-        im_flat = tf.cast(im_flat, 'float32')
         Ia = tf.gather(im_flat, idx_a)
         Ib = tf.gather(im_flat, idx_b)
         Ic = tf.gather(im_flat, idx_c)
         Id = tf.gather(im_flat, idx_d)
 
         # and finally calculate interpolated values
-        x0_f = tf.cast(x0, 'float32')
-        x1_f = tf.cast(x1, 'float32')
-        y0_f = tf.cast(y0, 'float32')
-        y1_f = tf.cast(y1, 'float32')
         wa = tf.expand_dims(((x1_f-x) * (y1_f-y)), 1)
         wb = tf.expand_dims(((x1_f-x) * (y-y0_f)), 1)
         wc = tf.expand_dims(((x-x0_f) * (y1_f-y)), 1)

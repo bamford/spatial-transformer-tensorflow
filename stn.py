@@ -1,8 +1,6 @@
 import tensorflow as tf
 import numpy as np
-import math
 
-import math
 """
 Implementation of Spatial Transformer Networks
 
@@ -235,7 +233,7 @@ class TPSTransformer(object):
         """
     
         # Create source grid
-        grid_size = math.sqrt(self.num_control_points)
+        grid_size = np.sqrt(self.num_control_points)
         assert grid_size*grid_size == self.num_control_points, 'num_control_points must be a square of an int'
     
         # Create 2 x num_points array of source points
@@ -263,15 +261,10 @@ class TPSTransformer(object):
 
             Parameters
             ----------
-
-            x1 : float
-                x coordinate of the first point.
-            y1 : float
-                y coordinate of the first point.
-            x2 : float 
-                x coordinate of the second point.
-            y2 : float
-                y coordinate of the second point.
+            x1, y1 : float
+                x and y coordinates of the first point.
+            x2, y2 : float 
+                x and y coordinates of the second point.
 
             Returns
             ----------
@@ -323,17 +316,15 @@ class TPSTransformer(object):
     
         # Take the product (r^2 * log(r^2)), being careful to avoid NaNs
         log_r_2 = np.log(r_2)
-        log_r_2[np.isinf(log_r_2)] = 0.
+        log_r_2[np.isinf(log_r_2)] = 0
         distances = r_2 * log_r_2
-    
     
         # Add in the coefficients for the affine translation (1, x, and y,
         # corresponding to a_1, a_x, and a_y)
         upper_array = np.ones(shape=(1, orig_grid.shape[1]),
                               dtype=np.float32)
-        right_mat = np.concatenate([upper_array, orig_grid, distances], axis=0)
-    
 
+        right_mat = np.concatenate([upper_array, orig_grid, distances], axis=0)
         # Convert to Tensors
         with tf.variable_scope(self.name):
             right_mat = tf.convert_to_tensor(right_mat, dtype=tf.float32)

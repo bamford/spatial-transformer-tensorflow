@@ -10,7 +10,6 @@ A Spatial Transformer Network implemented in Tensorflow 0.9 and based on [2] \(w
 
 This tensorflow implementation supports Affine, Projective and Elastic (Thin Plate Spline [6]) Transformations.
 
-
 <div align="center">
   <img src="imgs/pipeline.png"><br>
 </div>
@@ -66,6 +65,8 @@ example_elastic.py shows how to use ElasticTransformer. Here, deformations are d
   <img src="imgs/elastic3.png">
 </div>
 
+
+### Misc
 example_interp.py shows that interpolation doesn't have the bug at the edges, as in [2] and [3]. See https://github.com/tensorflow/models/issues/193 for details.
 
 

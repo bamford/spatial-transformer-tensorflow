@@ -1,5 +1,4 @@
 import tensorflow as tf
-import numpy as np
 
 """
 Implementation of Spatial Transformer Networks
@@ -45,7 +44,10 @@ class AffineTransformer(object):
         """
         self.name = name
         self.out_size = out_size
-        self.grid = self._meshgrid()
+        self.param_dim = 6
+
+        with tf.variable_scope(self.name):
+            self.grid = _meshgrid(self.out_size)
         
     
     def transform(self, U, theta):
@@ -71,39 +73,13 @@ class AffineTransformer(object):
 
         """
         with tf.variable_scope(self.name):
-            output = self._affine_transform(theta, U)
+            output = self._transform(theta, U)
 
         return output
 
 
-    def _meshgrid(self):
-        """
-        the regular grid of coordinates to sample the values after the transformation
-        
-        """
-        with tf.variable_scope(self.name + '_meshgrid'):
-            # This should be equivalent to:
-            #  x_t, y_t = np.meshgrid(np.linspace(-1, 1, width),
-            #                         np.linspace(-1, 1, height))
-            #  ones = np.ones(np.prod(x_t.shape))
-            #  grid = np.vstack([x_t.flatten(), y_t.flatten(), ones])
-            x_t = tf.matmul(tf.ones(shape=tf.pack([self.out_size[0], 1])),
-                            tf.transpose(tf.expand_dims(tf.linspace(-1.0, 1.0, self.out_size[1]), 1), [1, 0]))
-            y_t = tf.matmul(tf.expand_dims(tf.linspace(-1.0, 1.0, self.out_size[0]), 1),
-                            tf.ones(shape=tf.pack([1, self.out_size[1]])))
     
-            x_t_flat = tf.reshape(x_t, (1, -1))
-            y_t_flat = tf.reshape(y_t, (1, -1))
-    
-            ones = tf.ones_like(x_t_flat)
-            grid = tf.concat(0, [x_t_flat, y_t_flat, ones])
-
-            # Tiling for batches
-            grid = tf.expand_dims(grid, 0)
-            grid = tf.reshape(grid, [-1])
-            return grid
-    
-    def _affine_transform(self, theta, U):
+    def _transform(self, theta, U):
         with tf.variable_scope(self.name + '_affine_transform'):
             batch_size, _, _, num_channels = U.get_shape().as_list()
             theta = tf.reshape(theta, (-1, 2, 3))
@@ -125,32 +101,120 @@ class AffineTransformer(object):
             output = tf.reshape(input_transformed, [batch_size, self.out_size[0], self.out_size[1], num_channels])
             return output
     
+class ProjectiveTransformer(object):
+    """Spatial Projective Transformer Layer
 
-class TPSTransformer(object):
-    """Spatial Thin Plate Spline Transformer Layer
+    Implements a spatial transformer layer as described in [1]_.
+    Based on [2]_ and [3]_. Edited by Daniyar Turmukhambetov.
+
+    """
+
+    def __init__(self, out_size, name='SpatialProjectiveTransformer', **kwargs):
+        """
+        Parameters
+        ----------
+        out_size : tuple of two ints
+            The size of the output of the spatial network (height, width).
+        name : string
+            The scope name of the variables in this network.
+
+        """
+        self.name = name
+        self.out_size = out_size
+        self.param_dim = 8
+
+        with tf.variable_scope(self.name):
+            self.grid = _meshgrid(self.out_size)
+        
+    
+    def transform(self, U, theta):
+        """
+        Projective Transformation of input tensor U with parameters theta
+
+        Parameters
+        ----------
+        U : float
+            The input tensor should have the shape 
+            [batch_size, height, width, num_channels].
+        theta: float
+            The output of the localisation network
+            should have the shape
+            [batch_size, 8].
+        Notes
+        -----
+        To initialize the network to the identity transform initialize ``theta`` to :
+            identity = np.array([1., 0., 0.,
+                                [0., 1., 0.,
+                                [0., 0.])
+            theta = tf.Variable(initial_value=identity)
+
+        """
+        with tf.variable_scope(self.name):
+            output = self._transform(theta, U)
+
+        return output
+
+
+    
+    def _transform(self, theta, U):
+        with tf.variable_scope(self.name + '_projective_transform'):
+            batch_size, _, _, num_channels = U.get_shape().as_list()
+            theta = tf.reshape(theta, (batch_size, 8))
+            theta = tf.concat(1, [theta, tf.ones([batch_size, 1])])
+            theta = tf.reshape(theta, (batch_size, 3, 3))
+
+            grid = tf.tile(self.grid, tf.pack([batch_size]))
+            grid = tf.reshape(grid, [batch_size, 3, -1])
+    
+            # Transform A x (x_t, y_t, 1)^T -> (x_s, y_s)
+            T_g = tf.batch_matmul(theta, grid)
+            x_s = tf.slice(T_g, [0, 0, 0], [-1, 1, -1])
+            y_s = tf.slice(T_g, [0, 1, 0], [-1, 1, -1])
+            z_s = tf.slice(T_g, [0, 2, 0], [-1, 1, -1])
+
+            x_s = x_s/z_s
+            y_s = y_s/z_s
+
+            x_s_flat = tf.reshape(x_s, [-1])
+            y_s_flat = tf.reshape(y_s, [-1])
+    
+            input_transformed = _interpolate(
+                U, x_s_flat, y_s_flat,
+                self.out_size)
+    
+            output = tf.reshape(input_transformed, [batch_size, self.out_size[0], self.out_size[1], num_channels])
+            return output
+
+class ElasticTransformer(object):
+    """Spatial Elastic Transformer Layer with Thin Plate Spline deformations
 
     Implements a spatial transformer layer as described in [1]_.
     Based on [4]_ and [5]_. Edited by Daniyar Turmukhambetov.
 
     """
 
-    def __init__(self, out_size, num_control_points=16, name='SpatialTPSTransformer', **kwargs):
+    def __init__(self, out_size, param_dim=2*16, name='SpatialElasticTransformer', **kwargs):
         """
         Parameters
         ----------
         out_size : tuple of two ints
             The size of the output of the spatial network (height, width).
-        num_control_points : int
-            The number of control points that define 
+        param_dim: int
+            The 2 x number of control points that define 
             Thin Plate Splines deformation field. 
-            *MUST* be a square of an integer. 
-            16 by default.
+            number of control points *MUST* be a square of an integer. 
+            2 x 16 by default.
         name : string
             The scope name of the variables in this network.
             
         """
+        num_control_points = int(param_dim/2)
+        assert param_dim == 2*num_control_points, 'param_dim must be 2 times a square of an integer.'
+
         self.name = name
-        self.num_control_points = int(num_control_points)
+        self.param_dim = param_dim
+        self.num_control_points = num_control_points
+
         self.out_size = out_size
         self.right_mat, self.L_inv, self.source_points =  self._initialize_tps() 
 
@@ -177,11 +241,11 @@ class TPSTransformer(object):
 
         """
         with tf.variable_scope(self.name):
-            output = self._tps_transform(theta, U)
+            output = self._transform(theta, U)
         return output
 
-    def _tps_transform(self, theta, U):
-        with tf.variable_scope(self.name + '_tps_transform'):
+    def _transform(self, theta, U):
+        with tf.variable_scope(self.name + '_transform'):
             batch_size = U.get_shape().as_list()[0]
             source_points = tf.tile(tf.expand_dims(self.source_points, 0), [batch_size, 1, 1])
             right_mat = tf.tile(tf.expand_dims(self.right_mat, 0), (batch_size, 1, 1))
@@ -195,10 +259,8 @@ class TPSTransformer(object):
     
             # Solve as in ref [2]
             theta = tf.reshape(theta, [-1, self.num_control_points])
-            #coefficients = tf.matmul(theta, tf.transpose(self.L_inv[:, 3:]))
             coefficients = tf.matmul(theta, tf.transpose(self.L_inv))
             coefficients = tf.reshape(coefficients, [-1, 2, self.num_control_points+3])
-            #print(coefficients)
     
             # Transform each point on the source grid (image_size x image_size)
             transformed_points = tf.batch_matmul(coefficients, right_mat)
@@ -216,6 +278,7 @@ class TPSTransformer(object):
 
 
     def _initialize_tps(self):
+        import numpy as np
         """
         Initializes the thin plate spline calculation by creating the source
         point array and the inverted L matrix used for calculating the
@@ -339,6 +402,33 @@ class TPSTransformer(object):
 Common Functions
 
 """
+def _meshgrid(out_size):
+    """
+    the regular grid of coordinates to sample the values after the transformation
+    
+    """
+    with tf.variable_scope('meshgrid'):
+        # This should be equivalent to:
+        #  x_t, y_t = np.meshgrid(np.linspace(-1, 1, width),
+        #                         np.linspace(-1, 1, height))
+        #  ones = np.ones(np.prod(x_t.shape))
+        #  grid = np.vstack([x_t.flatten(), y_t.flatten(), ones])
+        x_t = tf.matmul(tf.ones(shape=tf.pack([out_size[0], 1])),
+                        tf.transpose(tf.expand_dims(tf.linspace(-1.0, 1.0, out_size[1]), 1), [1, 0]))
+        y_t = tf.matmul(tf.expand_dims(tf.linspace(-1.0, 1.0, out_size[0]), 1),
+                        tf.ones(shape=tf.pack([1, out_size[1]])))
+
+        x_t_flat = tf.reshape(x_t, (1, -1))
+        y_t_flat = tf.reshape(y_t, (1, -1))
+
+        ones = tf.ones_like(x_t_flat)
+        grid = tf.concat(0, [x_t_flat, y_t_flat, ones])
+
+        # Tiling for batches
+        grid = tf.expand_dims(grid, 0)
+        grid = tf.reshape(grid, [-1])
+        return grid
+
 
 def _repeat(x, n_repeats):
     with tf.variable_scope('_repeat'):
@@ -347,8 +437,9 @@ def _repeat(x, n_repeats):
         x = tf.matmul(tf.reshape(x, (-1, 1)), rep)
         return tf.reshape(x, [-1])
 
+
 def _interpolate(im, x, y, out_size):
-    with tf.variable_scope('_interpolate'):
+    with tf.variable_scope('interpolate'):
         # constants
         batch_size = tf.shape(im)[0]
         height = tf.shape(im)[1]

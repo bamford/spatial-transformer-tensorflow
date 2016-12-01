@@ -85,7 +85,14 @@ class AffineTransformer(object):
 
         """
         with tf.variable_scope(self.name):
-            output = self._transform(U, theta)
+            x_s, y_s = self._transform(U, theta)
+    
+            output = _interpolate(
+                U, x_s, y_s,
+                self.out_size)
+    
+            batch_size, _, _, num_channels = U.get_shape().as_list()
+            output = tf.reshape(output, [batch_size, self.out_size[0], self.out_size[1], num_channels])
 
         return output
 
@@ -105,13 +112,7 @@ class AffineTransformer(object):
             y_s = tf.slice(T_g, [0, 1, 0], [-1, 1, -1])
             x_s_flat = tf.reshape(x_s, [-1])
             y_s_flat = tf.reshape(y_s, [-1])
-    
-            input_transformed = _interpolate(
-                U, x_s_flat, y_s_flat,
-                self.out_size)
-    
-            output = tf.reshape(input_transformed, [batch_size, self.out_size[0], self.out_size[1], num_channels])
-            return output
+            return x_s_flat, y_s_flat
     
 class ProjectiveTransformer(object):
     """Spatial Projective Transformer Layer
@@ -162,7 +163,14 @@ class ProjectiveTransformer(object):
 
         """
         with tf.variable_scope(self.name):
-            output = self._transform(U, theta)
+            x_s, y_s = self._transform(U, theta)
+    
+            output = _interpolate(
+                U, x_s, y_s,
+                self.out_size)
+    
+            batch_size, _, _, num_channels = U.get_shape().as_list()
+            output = tf.reshape(output, [batch_size, self.out_size[0], self.out_size[1], num_channels])
 
         return output
 
@@ -189,13 +197,7 @@ class ProjectiveTransformer(object):
 
             x_s_flat = tf.reshape(x_s, [-1])
             y_s_flat = tf.reshape(y_s, [-1])
-    
-            input_transformed = _interpolate(
-                U, x_s_flat, y_s_flat,
-                self.out_size)
-    
-            output = tf.reshape(input_transformed, [batch_size, self.out_size[0], self.out_size[1], num_channels])
-            return output
+            return x_s_flat, y_s_flat
 
 class ElasticTransformer(object):
     """Spatial Elastic Transformer Layer with Thin Plate Spline deformations
@@ -253,7 +255,14 @@ class ElasticTransformer(object):
 
         """
         with tf.variable_scope(self.name):
-            output = self._transform(U, theta)
+            x_s, y_s = self._transform(U, theta)
+    
+            output = _interpolate(
+                U, x_s, y_s,
+                self.out_size)
+    
+            batch_size, _, _, num_channels = U.get_shape().as_list()
+            output = tf.reshape(output, [batch_size, self.out_size[0], self.out_size[1], num_channels])
         return output
 
     def _transform(self, U, theta):
@@ -280,13 +289,7 @@ class ElasticTransformer(object):
     
             x_s_flat = tf.reshape(transformed_points[:,0,:], [-1])
             y_s_flat = tf.reshape(transformed_points[:,1,:], [-1])
-    
-            input_transformed = _interpolate(
-                    U, x_s_flat, y_s_flat,
-                    self.out_size)
-            
-            output = tf.reshape(input_transformed, [batch_size, out_height, out_width, -1])
-            return output
+            return x_s_flat, y_s_flat
 
 
     def _initialize_tps(self):

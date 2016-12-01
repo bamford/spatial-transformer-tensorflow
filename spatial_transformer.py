@@ -463,7 +463,6 @@ def _interpolate(im, x, y, out_size, method='bilinear'):
 
 def bilinear_interp(im, x, y, out_size):
     with tf.variable_scope('bilinear_interp'):
-        # constants
         batch_size, height, width, channels = im.get_shape().as_list()
 
         x = tf.cast(x, 'float32')
@@ -519,7 +518,8 @@ def bilinear_interp(im, x, y, out_size):
 
 
 def bicubic_interp(im, x, y, out_size):
-    alpha = -0.75 # same as in tf.image.resize_images
+    alpha = -0.75 # same as in tf.image.resize_images, see:
+    #  tensorflow/tensorflow/core/kernels/resize_bicubic_op.cc
     bicubic_coeffs = (
             (1, 0,     -(alpha+3), (alpha+2)),
             (0, alpha, -2*alpha,   alpha    ),
@@ -528,7 +528,6 @@ def bicubic_interp(im, x, y, out_size):
             )
 
     with tf.variable_scope('bilinear_interp'):
-        # constants
         batch_size, height, width, channels = im.get_shape().as_list()
 
         x = tf.cast(x, 'float32')
@@ -545,6 +544,7 @@ def bicubic_interp(im, x, y, out_size):
         y = (y + 1.0) / 2.0 * (height_f-1.0)
 
         # do sampling
+        # integer coordinates of 4x4 neighbourhood around (x0_f, y0_f)
         x0_f = tf.floor(x)
         y0_f = tf.floor(y)
         xm1_f = x0_f - 1
@@ -554,6 +554,7 @@ def bicubic_interp(im, x, y, out_size):
         xp2_f = x0_f + 2
         yp2_f = y0_f + 2
 
+        # clipped integer coordinates
         xs = [0]*4
         ys = [0]*4
         xs[0] = tf.cast(x0_f, 'int32')
@@ -565,6 +566,7 @@ def bicubic_interp(im, x, y, out_size):
         xs[3] = tf.cast(tf.minimum(xp2_f, width_f - 1), 'int32')
         ys[3] = tf.cast(tf.minimum(yp2_f, height_f - 1), 'int32')
 
+        # indices of neighbours for the batch
         dim2 = width
         dim1 = width*height
         base = _repeat(tf.range(batch_size)*dim1, out_height*out_width)
@@ -601,8 +603,8 @@ def bicubic_interp(im, x, y, out_size):
             return weights
 
 
-        # and finally calculate interpolated values
-        # Interpolate in x dim 4 times for y=[0, -1, 1, 2]
+        # to calculate interpolated values first, 
+        # interpolate in x dim 4 times for y=[0, -1, 1, 2]
         weights = get_weights(x, x0_f)
         x_interp = []
         for i in range(4):
@@ -611,7 +613,7 @@ def bicubic_interp(im, x, y, out_size):
                 result = result + [weights[j]*Is[i][j]]
             x_interp.append(tf.add_n(result))
 
-        # Interpolate in y dim using interpolations in x dim
+        # finally, interpolate in y dim using interpolations in x dim
         weights = get_weights(y, y0_f)
         y_interp = []
         for i in range(4):

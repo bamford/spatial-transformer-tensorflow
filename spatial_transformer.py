@@ -452,14 +452,19 @@ def _repeat(x, n_repeats):
         x = tf.matmul(tf.reshape(x, (-1, 1)), rep)
         return tf.reshape(x, [-1])
 
+def _interpolate(im, x, y, out_size, method='bilinear'):
+#def _interpolate(im, x, y, out_size, method='bicubic'):
+    if method=='bilinear':
+        return bilinear_interp(im, x, y, out_size)
+    if method=='bicubic':
+        return bicubic_interp(im, x, y, out_size)
+    return None
 
-def _interpolate(im, x, y, out_size):
-    with tf.variable_scope('interpolate'):
+
+def bilinear_interp(im, x, y, out_size):
+    with tf.variable_scope('bilinear_interp'):
         # constants
-        batch_size = tf.shape(im)[0]
-        height = tf.shape(im)[1]
-        width = tf.shape(im)[2]
-        channels = tf.shape(im)[3]
+        batch_size, height, width, channels = im.get_shape().as_list()
 
         x = tf.cast(x, 'float32')
         y = tf.cast(y, 'float32')
@@ -467,7 +472,6 @@ def _interpolate(im, x, y, out_size):
         width_f = tf.cast(width, 'float32')
         out_height = out_size[0]
         out_width = out_size[1]
-        zero = tf.zeros([], dtype='int32')
 
         # scale indices from [-1, 1] to [0, width/height - 1]
         x = tf.clip_by_value(x, -1, 1)
@@ -491,6 +495,7 @@ def _interpolate(im, x, y, out_size):
         base = _repeat(tf.range(batch_size)*dim1, out_height*out_width)
         base_y0 = base + y0*dim2
         base_y1 = base + y1*dim2
+
         idx_a = base_y0 + x0
         idx_b = base_y1 + x0
         idx_c = base_y0 + x1
@@ -511,3 +516,107 @@ def _interpolate(im, x, y, out_size):
         wd = tf.expand_dims(((x-x0_f) * (y-y0_f)), 1)
         output = tf.add_n([wa*Ia, wb*Ib, wc*Ic, wd*Id])
         return output
+
+
+def bicubic_interp(im, x, y, out_size):
+    alpha = -0.75 # same as in tf.image.resize_images
+    bicubic_coeffs = (
+            (1, 0,     -(alpha+3), (alpha+2)),
+            (0, alpha, -2*alpha,   alpha    ),
+            (0, -alpha, 2*alpha+3, -alpha-2 ),
+            (0, 0,      alpha,     -alpha   )
+            )
+
+    with tf.variable_scope('bilinear_interp'):
+        # constants
+        batch_size, height, width, channels = im.get_shape().as_list()
+
+        x = tf.cast(x, 'float32')
+        y = tf.cast(y, 'float32')
+        height_f = tf.cast(height, 'float32')
+        width_f = tf.cast(width, 'float32')
+        out_height = out_size[0]
+        out_width = out_size[1]
+
+        # scale indices from [-1, 1] to [0, width/height - 1]
+        x = tf.clip_by_value(x, -1, 1)
+        y = tf.clip_by_value(y, -1, 1)
+        x = (x + 1.0) / 2.0 * (width_f-1.0)
+        y = (y + 1.0) / 2.0 * (height_f-1.0)
+
+        # do sampling
+        x0_f = tf.floor(x)
+        y0_f = tf.floor(y)
+        xm1_f = x0_f - 1
+        ym1_f = y0_f - 1
+        xp1_f = x0_f + 1
+        yp1_f = y0_f + 1
+        xp2_f = x0_f + 2
+        yp2_f = y0_f + 2
+
+        xs = [0]*4
+        ys = [0]*4
+        xs[0] = tf.cast(x0_f, 'int32')
+        ys[0] = tf.cast(y0_f, 'int32')
+        xs[1] = tf.cast(tf.maximum(xm1_f, 0), 'int32')
+        ys[1] = tf.cast(tf.maximum(ym1_f, 0), 'int32')
+        xs[2] = tf.cast(tf.minimum(xp1_f, width_f - 1), 'int32')
+        ys[2] = tf.cast(tf.minimum(yp1_f, height_f - 1), 'int32')
+        xs[3] = tf.cast(tf.minimum(xp2_f, width_f - 1), 'int32')
+        ys[3] = tf.cast(tf.minimum(yp2_f, height_f - 1), 'int32')
+
+        dim2 = width
+        dim1 = width*height
+        base = _repeat(tf.range(batch_size)*dim1, out_height*out_width)
+
+        idx = []
+        for i in range(4):
+            idx.append([])
+            for j in range(4):
+                cur_idx = base + ys[i]*dim2 + xs[j]
+                idx[i].append(cur_idx)
+
+        # use indices to lookup pixels in the flat image and restore
+        # channels dim
+        im_flat = tf.reshape(im, tf.pack([-1, channels]))
+
+        Is = []
+        for i in range(4):
+            Is.append([])
+            for j in range(4):
+                Is[i].append(tf.gather(im_flat, idx[i][j]))
+
+        def get_weights(x, x0_f):
+            tx = (x-x0_f)
+            tx2 = tx * tx
+            tx3 = tx2 * tx
+            t = [1, tx, tx2, tx3]
+            weights = []
+            for i in range(4):
+                result = 0
+                for j in range(4):
+                    result = result + bicubic_coeffs[i][j]*t[j]
+                result = tf.reshape(result, [-1, 1])
+                weights.append(result)
+            return weights
+
+
+        # and finally calculate interpolated values
+        # Interpolate in x dim 4 times for y=[0, -1, 1, 2]
+        weights = get_weights(x, x0_f)
+        x_interp = []
+        for i in range(4):
+            result = []
+            for j in range(4):
+                result = result + [weights[j]*Is[i][j]]
+            x_interp.append(tf.add_n(result))
+
+        # Interpolate in y dim using interpolations in x dim
+        weights = get_weights(y, y0_f)
+        y_interp = []
+        for i in range(4):
+            y_interp = y_interp + [weights[i]*x_interp[i]]
+
+        output = tf.add_n(y_interp)
+        return output
+

@@ -266,7 +266,7 @@ class ElasticTransformer(object):
         return output
 
     def _transform(self, U, theta):
-        with tf.variable_scope(self.name + '_transform'):
+        with tf.variable_scope(self.name + '_elastic_transform'):
             batch_size = U.get_shape().as_list()[0]
             source_points = tf.tile(tf.expand_dims(self.source_points, 0), [batch_size, 1, 1])
             right_mat = tf.tile(tf.expand_dims(self.right_mat, 0), (batch_size, 1, 1))

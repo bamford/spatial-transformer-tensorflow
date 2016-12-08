@@ -44,7 +44,7 @@ class AffineTransformer(object):
 
     """
 
-    def __init__(self, out_size, name='SpatialAffineTransformer', **kwargs):
+    def __init__(self, out_size, name='SpatialAffineTransformer', interp_method='bilinear', **kwargs):
         """
         Parameters
         ----------
@@ -57,6 +57,7 @@ class AffineTransformer(object):
         self.name = name
         self.out_size = out_size
         self.param_dim = 6
+        self.interp_method=interp_method
 
         with tf.variable_scope(self.name):
             self.grid = _meshgrid(self.out_size)
@@ -89,7 +90,9 @@ class AffineTransformer(object):
     
             output = _interpolate(
                 U, x_s, y_s,
-                self.out_size)
+                self.out_size,
+                method=self.interp_method
+                )
     
             batch_size, _, _, num_channels = U.get_shape().as_list()
             output = tf.reshape(output, [batch_size, self.out_size[0], self.out_size[1], num_channels])
@@ -122,7 +125,7 @@ class ProjectiveTransformer(object):
 
     """
 
-    def __init__(self, out_size, name='SpatialProjectiveTransformer', **kwargs):
+    def __init__(self, out_size, name='SpatialProjectiveTransformer', interp_method='bilinear', **kwargs):
         """
         Parameters
         ----------
@@ -135,6 +138,7 @@ class ProjectiveTransformer(object):
         self.name = name
         self.out_size = out_size
         self.param_dim = 8
+        self.interp_method=interp_method
 
         with tf.variable_scope(self.name):
             self.grid = _meshgrid(self.out_size)
@@ -167,7 +171,9 @@ class ProjectiveTransformer(object):
     
             output = _interpolate(
                 U, x_s, y_s,
-                self.out_size)
+                self.out_size,
+                method=self.interp_method
+                )
     
             batch_size, _, _, num_channels = U.get_shape().as_list()
             output = tf.reshape(output, [batch_size, self.out_size[0], self.out_size[1], num_channels])
@@ -207,7 +213,7 @@ class ElasticTransformer(object):
 
     """
 
-    def __init__(self, out_size, param_dim=2*16, name='SpatialElasticTransformer', **kwargs):
+    def __init__(self, out_size, param_dim=2*16, name='SpatialElasticTransformer', interp_method='bilinear', **kwargs):
         """
         Parameters
         ----------
@@ -227,6 +233,7 @@ class ElasticTransformer(object):
 
         self.name = name
         self.param_dim = param_dim
+        self.interp_method=interp_method
         self.num_control_points = num_control_points
 
         self.out_size = out_size
@@ -259,7 +266,9 @@ class ElasticTransformer(object):
     
             output = _interpolate(
                 U, x_s, y_s,
-                self.out_size)
+                self.out_size,
+                method=self.interp_method
+                )
     
             batch_size, _, _, num_channels = U.get_shape().as_list()
             output = tf.reshape(output, [batch_size, self.out_size[0], self.out_size[1], num_channels])
@@ -452,8 +461,7 @@ def _repeat(x, n_repeats):
         x = tf.matmul(tf.reshape(x, (-1, 1)), rep)
         return tf.reshape(x, [-1])
 
-def _interpolate(im, x, y, out_size, method='bilinear'):
-#def _interpolate(im, x, y, out_size, method='bicubic'):
+def _interpolate(im, x, y, out_size, method):
     if method=='bilinear':
         return bilinear_interp(im, x, y, out_size)
     if method=='bicubic':

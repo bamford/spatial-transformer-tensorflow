@@ -47,7 +47,7 @@ with tf.Session() as sess:
         result = stl.transform(x, theta)
 
     # %% Run session
-    sess.run(tf.initialize_all_variables())
+    sess.run(tf.global_variables_initializer())
     result_ = sess.run(result, feed_dict={x: batch})
 
 # save our result

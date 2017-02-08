@@ -432,15 +432,15 @@ def _meshgrid(out_size):
     
     """
     with tf.variable_scope('meshgrid'):
+
         # This should be equivalent to:
         #  x_t, y_t = np.meshgrid(np.linspace(-1, 1, width),
         #                         np.linspace(-1, 1, height))
         #  ones = np.ones(np.prod(x_t.shape))
         #  grid = np.vstack([x_t.flatten(), y_t.flatten(), ones])
-        x_t = tf.matmul(tf.ones(shape=tf.pack([out_size[0], 1])),
-                        tf.transpose(tf.expand_dims(tf.linspace(-1.0, 1.0, out_size[1]), 1), [1, 0]))
-        y_t = tf.matmul(tf.expand_dims(tf.linspace(-1.0, 1.0, out_size[0]), 1),
-                        tf.ones(shape=tf.pack([1, out_size[1]])))
+
+        x_t, y_t = tf.meshgrid(tf.linspace(-1.0, 1.0,  out_size[1]),
+                               tf.linspace(-1.0, 1.0,  out_size[0]))
 
         x_t_flat = tf.reshape(x_t, (1, -1))
         y_t_flat = tf.reshape(y_t, (1, -1))
@@ -457,7 +457,7 @@ def _meshgrid(out_size):
 def _repeat(x, n_repeats):
     with tf.variable_scope('_repeat'):
         rep = tf.transpose(tf.expand_dims(tf.ones(shape=tf.pack([n_repeats, ])), 1), [1, 0])
-        rep = tf.cast(rep, 'int32')
+        rep = tf.cast(rep, tf.int32)
         x = tf.matmul(tf.reshape(x, (-1, 1)), rep)
         return tf.reshape(x, [-1])
 
@@ -472,11 +472,10 @@ def _interpolate(im, x, y, out_size, method):
 def bilinear_interp(im, x, y, out_size):
     with tf.variable_scope('bilinear_interp'):
         batch_size, height, width, channels = im.get_shape().as_list()
-
-        x = tf.cast(x, 'float32')
-        y = tf.cast(y, 'float32')
-        height_f = tf.cast(height, 'float32')
-        width_f = tf.cast(width, 'float32')
+        x = tf.cast(x, tf.float32)
+        y = tf.cast(y, tf.float32)
+        height_f = tf.cast(height, tf.float32)
+        width_f = tf.cast(width, tf.float32)
         out_height = out_size[0]
         out_width = out_size[1]
 
@@ -492,10 +491,10 @@ def bilinear_interp(im, x, y, out_size):
         x1_f = x0_f + 1
         y1_f = y0_f + 1
 
-        x0 = tf.cast(x0_f, 'int32')
-        y0 = tf.cast(y0_f, 'int32')
-        x1 = tf.cast(tf.minimum(x1_f, width_f - 1), 'int32')
-        y1 = tf.cast(tf.minimum(y1_f, height_f - 1), 'int32')
+        x0 = tf.cast(x0_f, tf.int32)
+        y0 = tf.cast(y0_f, tf.int32)
+        x1 = tf.cast(tf.minimum(x1_f, width_f - 1),  tf.int32)
+        y1 = tf.cast(tf.minimum(y1_f, height_f - 1), tf.int32)
 
         dim2 = width
         dim1 = width*height
@@ -538,10 +537,10 @@ def bicubic_interp(im, x, y, out_size):
     with tf.variable_scope('bilinear_interp'):
         batch_size, height, width, channels = im.get_shape().as_list()
 
-        x = tf.cast(x, 'float32')
-        y = tf.cast(y, 'float32')
-        height_f = tf.cast(height, 'float32')
-        width_f = tf.cast(width, 'float32')
+        x = tf.cast(x, tf.float32)
+        y = tf.cast(y, tf.float32)
+        height_f = tf.cast(height, tf.float32)
+        width_f = tf.cast(width, tf.float32)
         out_height = out_size[0]
         out_width = out_size[1]
 
@@ -565,14 +564,14 @@ def bicubic_interp(im, x, y, out_size):
         # clipped integer coordinates
         xs = [0]*4
         ys = [0]*4
-        xs[0] = tf.cast(x0_f, 'int32')
-        ys[0] = tf.cast(y0_f, 'int32')
-        xs[1] = tf.cast(tf.maximum(xm1_f, 0), 'int32')
-        ys[1] = tf.cast(tf.maximum(ym1_f, 0), 'int32')
-        xs[2] = tf.cast(tf.minimum(xp1_f, width_f - 1), 'int32')
-        ys[2] = tf.cast(tf.minimum(yp1_f, height_f - 1), 'int32')
-        xs[3] = tf.cast(tf.minimum(xp2_f, width_f - 1), 'int32')
-        ys[3] = tf.cast(tf.minimum(yp2_f, height_f - 1), 'int32')
+        xs[0] = tf.cast(x0_f, tf.int32)
+        ys[0] = tf.cast(y0_f, tf.int32)
+        xs[1] = tf.cast(tf.maximum(xm1_f, 0), tf.int32)
+        ys[1] = tf.cast(tf.maximum(ym1_f, 0), tf.int32)
+        xs[2] = tf.cast(tf.minimum(xp1_f, width_f - 1),  tf.int32)
+        ys[2] = tf.cast(tf.minimum(yp1_f, height_f - 1), tf.int32)
+        xs[3] = tf.cast(tf.minimum(xp2_f, width_f - 1),  tf.int32)
+        ys[3] = tf.cast(tf.minimum(yp2_f, height_f - 1), tf.int32)
 
         # indices of neighbours for the batch
         dim2 = width

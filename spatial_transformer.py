@@ -274,6 +274,7 @@ class ElasticTransformer(object):
             output = tf.reshape(output, [batch_size, self.out_size[0], self.out_size[1], num_channels])
         return output
 
+
     def _transform(self, U, theta):
         with tf.variable_scope(self.name + '_elastic_transform'):
             batch_size = U.get_shape().as_list()[0]

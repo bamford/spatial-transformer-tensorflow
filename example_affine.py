@@ -51,7 +51,7 @@ with tf.Session() as sess:
         theta = initial + 0.1*tf.random_normal([batch_size, stl.param_dim])
         result = stl.transform(x, theta)
 
-    sess.run(tf.initialize_all_variables())
+    sess.run(tf.global_variables_initializer())
     result_ = sess.run(result, feed_dict={x: batch})
 
 # save our result

@@ -37,6 +37,8 @@ with tf.Session() as sess:
         result_bicubic = stl_bicubic.transform(x, theta)
         result_bilinear_tf = tf.image.resize_bilinear(x, outsize, align_corners=True)
         result_bicubic_tf = tf.image.resize_bicubic(x, outsize, align_corners=True)
+        #result_bilinear_tf = tf.image.resize_bilinear(x, outsize)
+        #result_bicubic_tf = tf.image.resize_bicubic(x, outsize)
 
     sess.run(tf.initialize_all_variables())
     result_bilinear_ = sess.run(result_bilinear, feed_dict={x: batch})

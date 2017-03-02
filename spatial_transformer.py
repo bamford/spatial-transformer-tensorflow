@@ -282,7 +282,7 @@ class ElasticTransformer(object):
     
             # reshape destination offsets to be (batch_size, 2, num_control_points)
             # and add to source_points
-            source_points = tf.tile(tf.expand_dims(self.source_points, 0), [batch_size, 1, 1])
+            source_points = tf.expand_dims(self.source_points, 0)
             theta = source_points + tf.reshape(theta, tf.pack([-1, 2, self.num_control_points]))
     
             # Solve as in ref [2]
@@ -311,7 +311,7 @@ class ElasticTransformer(object):
     
             # reshape destination offsets to be (batch_size, 2, num_control_points)
             # and add to source_points
-            source_points = tf.tile(tf.expand_dims(self.source_points, 0), [batch_size, 1, 1])
+            source_points = tf.expand_dims(self.source_points, 0)
             theta = source_points + tf.reshape(theta, tf.pack([-1, 2, self.num_control_points]))
     
             # Solve as in ref [2]
@@ -372,109 +372,62 @@ class ElasticTransformer(object):
         """
     
         # Create source grid
-        grid_size = np.sqrt(self.num_control_points)
+        grid_size = np.floor(np.sqrt(self.num_control_points))
         assert grid_size*grid_size == self.num_control_points, 'num_control_points must be a square of an int'
     
         # Create 2 x num_points array of source points
-        x_control_source, y_control_source = np.meshgrid(
-            np.linspace(-1, 1, grid_size),
-            np.linspace(-1, 1, grid_size))
-        source_points = np.vstack((x_control_source.flatten(), y_control_source.flatten()))
-        source_points = source_points.astype(np.float32)
+        x_control_source, y_control_source = tf.meshgrid(
+            tf.linspace(-1.0, 1.0, grid_size),
+            tf.linspace(-1.0, 1.0, grid_size))
+        x_cs_flat = tf.reshape(x_control_source, (1,-1))
+        y_cs_flat = tf.reshape(y_control_source, (1,-1))
+        source_points = tf.concat(0, [x_cs_flat, y_cs_flat])
     
         # Get number of equations
         num_equations = self.num_control_points + 3
     
+        tL = tf.transpose(tf.reduce_sum(tf.square(tf.expand_dims(source_points, 2) - tf.expand_dims(source_points, 1)), axis=0))
+        log_tL = tf.log(tL)
+        log_tL = tf.where(tf.is_inf(log_tL), tf.zeros_like(log_tL), log_tL)
+        tL = tL * log_tL
+
         # Initialize L to be num_equations square matrix
-        L = np.zeros((num_equations, num_equations), dtype=np.float32)
-    
-        # Create P matrix components
-        L[0:2, 3:num_equations] = source_points
-        L[2, 3:num_equations] = 1.
-        L[3:num_equations, 0:2] = source_points.T
-        L[3:num_equations, 2] = 1.
+        L_top = tf.concat(1, [tf.zeros([2,3]), source_points])
+        L_mid = tf.concat(1, [tf.zeros([1, 2]), tf.ones([1, num_equations-2])])
+        L_bot = tf.concat(1, [tf.transpose(source_points), tf.ones([num_equations-3, 1]), tL])
 
-        def _U_func_numpy(x1, y1, x2, y2):
-            """
-            Function which implements the U function from Bookstein paper [5]_
-
-            Parameters
-            ----------
-            x1, y1 : float
-                x and y coordinates of the first point.
-            x2, y2 : float 
-                x and y coordinates of the second point.
-
-            Returns
-            ----------
-            value of z
-
-            """
-        
-            # Return zero if same point
-            if x1 == x2 and y1 == y2:
-                return 0.
-        
-            # Calculate the squared Euclidean norm (r^2)
-            r_2 = (x2 - x1) ** 2 + (y2 - y1) ** 2
-        
-            # Return the squared norm (r^2 * log r^2)
-            return r_2 * np.log(r_2)
+        L = tf.concat(0, [L_top, L_mid, L_bot])
+        L_inv = tf.matrix_inverse(L)
     
-    
-        # Loop through each pair of points and create the K matrix
-        for point_1 in range(self.num_control_points):
-            for point_2 in range(point_1, self.num_control_points):
-                L[point_1 + 3, point_2 + 3] = _U_func_numpy(
-                        source_points[0, point_1], source_points[1, point_1],
-                        source_points[0, point_2], source_points[1, point_2])
-    
-                if point_1 != point_2:
-                    L[point_2 + 3, point_1 + 3] = L[point_1 + 3, point_2 + 3]
-    
-        # Invert
-        L_inv = np.linalg.inv(L)
-    
-        # Construct grid
-        x_t, y_t = np.meshgrid(np.linspace(-1, 1, self.out_size[1]),
-                               np.linspace(-1, 1, self.out_size[0]))
-        orig_grid = np.vstack([x_t.flatten(), y_t.flatten()])
-        orig_grid = orig_grid.astype(np.float32)
-    
-        # Construct right mat
-    
-        # First Calculate the U function for the new point and each source
-        # point as in ref [5]_
-        # The U function is simply U(r) = r^2 * log(r^2), where r^2 is the
-        # squared distance
-        to_transform = orig_grid[:, :, np.newaxis]
-        stacked_transform = np.tile(to_transform, (1, 1, self.num_control_points))
-        stacked_source_points =  source_points[:, np.newaxis, :]
-    
-        r_2 = np.sum((stacked_transform - stacked_source_points) ** 2, axis=0).transpose()
-    
-        # Take the product (r^2 * log(r^2)), being careful to avoid NaNs
-        log_r_2 = np.log(r_2)
-        log_r_2[np.isinf(log_r_2)] = 0
-        distances = r_2 * log_r_2
-    
-        # Add in the coefficients for the affine translation (1, x, and y,
-        # corresponding to a_1, a_x, and a_y)
-        ones = np.ones(shape=(1, orig_grid.shape[1]),
-                              dtype=np.float32)
-
-        #right_mat_top = np.concatenate([ones, orig_grid], axis=0)
-        right_mat_top = orig_grid
-        right_mat_bottom = np.concatenate([ones, distances], axis=0)
-        #right_mat = np.concatenate([ones, orig_grid, distances], axis=0)
-
-        # Convert to Tensors
         with tf.variable_scope(self.name):
-            #right_mat = tf.convert_to_tensor(right_mat, dtype=tf.float32)
-            right_mat_top = tf.convert_to_tensor(right_mat_top, dtype=tf.float32)
-            right_mat_bottom = tf.convert_to_tensor(right_mat_bottom, dtype=tf.float32)
-            L_inv = tf.convert_to_tensor(np.transpose(L_inv[:,3:]), dtype=tf.float32)
-            source_points = tf.convert_to_tensor(source_points, dtype=tf.float32)
+            # Construct grid
+            x_t, y_t = tf.meshgrid(tf.linspace(-1.0, 1.0, self.out_size[1]),
+                                   tf.linspace(-1.0, 1.0, self.out_size[0]))
+            x_t_flat = tf.reshape(x_t, (1,-1))
+            y_t_flat = tf.reshape(y_t, (1,-1))
+            orig_grid = tf.concat(0, [x_t_flat, y_t_flat])
+    
+            # Construct right mat
+    
+            # First Calculate the U function for the new point and each source
+            # point as in ref [5]_
+            # The U function is simply U(r) = r^2 * log(r^2), where r^2 is the
+            # squared distance
+            to_transform = tf.expand_dims(orig_grid, 2)
+            stacked_source_points = tf.expand_dims(source_points, 1)
+
+            r_2 = tf.transpose(tf.reduce_sum(tf.square(to_transform - stacked_source_points), axis=0))
+            # Take the product (r^2 * log(r^2)), being careful to avoid NaNs
+            log_r_2 = tf.log(r_2)
+            log_r_2 = tf.where(tf.is_inf(log_r_2), tf.zeros_like(log_r_2), log_r_2)
+            distances = r_2 * log_r_2
+    
+            # Add in the coefficients for the affine translation (1, x, and y,
+            # corresponding to a_1, a_x, and a_y)
+            ones = tf.ones(shape=[1, orig_grid.get_shape().as_list()[1]])
+            right_mat_top = orig_grid
+            right_mat_bottom = tf.concat(0, [ones, distances])
+            L_inv = tf.transpose(L_inv[:,3:])
 
         return right_mat_top, right_mat_bottom, L_inv, source_points
 

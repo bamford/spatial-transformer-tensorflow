@@ -301,57 +301,18 @@ class ElasticTransformer(object):
 
             return x_s_flat, y_s_flat
 
+    # U function for the new point and each source point 
+    def U_func(points1, points2):
+        # The U function is simply U(r) = r^2 * log(r^2), as in ref [5]_,
+        # where r is the euclidean distance
+        r_sq  = tf.transpose(tf.reduce_sum(tf.square(points1 - points2), axis=0))
+        log_r = tf.log(r_sq)
+        log_r = tf.where(tf.is_inf(log_r), tf.zeros_like(log_r), log_r)
+        phi = r_sq * log_r
 
-    def _transform2(self, U, theta, forward=True):
-        with tf.variable_scope(self.name + '_elastic_transform'):
-            batch_size = U.get_shape().as_list()[0]
-
-            out_height = self.out_size[0]
-            out_width = self.out_size[1]
-    
-            # reshape destination offsets to be (batch_size, 2, num_control_points)
-            # and add to source_points
-            source_points = tf.expand_dims(self.source_points, 0)
-            theta = source_points + tf.reshape(theta, tf.pack([-1, 2, self.num_control_points]))
-    
-            # Solve as in ref [2]
-            theta = tf.reshape(theta, [-1, self.num_control_points])
-            print('L_inv',self.L_inv.get_shape())
-            #coefficients = tf.matmul(theta, tf.transpose(self.L_inv))
-            #coefficients = tf.reshape(coefficients, [-1, 2, self.num_control_points+3])
-            coefficients = tf.matmul(theta, self.L_inv)
-            coefficients = tf.reshape(coefficients, [-1, 2, self.num_control_points+3])
-            coefficients_top = coefficients[:,:,0:2]
-            coefficients_bottom = coefficients[:,:,2:self.num_control_points+3]
-    
-            # Transform each point on the source grid (image_size x image_size)
-            #right_mat = tf.tile(tf.expand_dims(self.right_mat, 0), (batch_size, 1, 1))
-            right_mat_top = tf.tile(tf.expand_dims(self.right_mat_top, 0), (batch_size, 1, 1))
-            right_mat_bottom = tf.tile(tf.expand_dims(self.right_mat_bottom, 0), (batch_size, 1, 1))
-            #transformed_points = tf.batch_matmul(coefficients, right_mat)
-            print('right_mat_top', right_mat_top.get_shape())
-            print('right_mat_bottom', right_mat_bottom.get_shape())
-            #transformed_points = tf.batch_matmul(coefficients, tf.concat(1, [right_mat_top, right_mat_bottom]))
-            print('coefficients_top', coefficients_top.get_shape())
-            print('coefficients_bottom', coefficients_bottom.get_shape())
-
-            transformed_points_bottom = tf.batch_matmul(coefficients_bottom, right_mat_bottom)
-            transformed_points_bottom = tf.reshape(transformed_points_bottom, [-1, 2, out_height*out_width])
-           
-            transformed_points_top = tf.batch_matmul(coefficients_top, right_mat_top)
-            transformed_points_top = tf.reshape(transformed_points_top, [-1, 2, out_height*out_width])
-
-            transformed_points = transformed_points_top +  transformed_points_bottom
-            transformed_points = tf.reshape(transformed_points, [-1, 2, out_height*out_width])
-    
-            x_s_flat = tf.reshape(transformed_points[:,0,:], [-1])
-            y_s_flat = tf.reshape(transformed_points[:,1,:], [-1])
-
-            if forward:
-                return x_s_flat, y_s_flat
-            else:
-                return x_s_flat, y_s_flat
-
+        # The U function is simply U(r) = r, where r is the euclidean distance
+        #phi = tf.sqrt(r_sq)
+        return phi
 
     def _initialize_tps(self):
         import numpy as np
@@ -375,56 +336,40 @@ class ElasticTransformer(object):
         grid_size = np.floor(np.sqrt(self.num_control_points))
         assert grid_size*grid_size == self.num_control_points, 'num_control_points must be a square of an int'
     
-        # Create 2 x num_points array of source points
-        x_control_source, y_control_source = tf.meshgrid(
-            tf.linspace(-1.0, 1.0, grid_size),
-            tf.linspace(-1.0, 1.0, grid_size))
-        x_cs_flat = tf.reshape(x_control_source, (1,-1))
-        y_cs_flat = tf.reshape(y_control_source, (1,-1))
-        source_points = tf.concat(0, [x_cs_flat, y_cs_flat])
-    
-        # Get number of equations
-        num_equations = self.num_control_points + 3
-    
-        tL = tf.transpose(tf.reduce_sum(tf.square(tf.expand_dims(source_points, 2) - tf.expand_dims(source_points, 1)), axis=0))
-        log_tL = tf.log(tL)
-        log_tL = tf.where(tf.is_inf(log_tL), tf.zeros_like(log_tL), log_tL)
-        tL = tL * log_tL
+        def get_meshgrid(grid_size_x, grid_size_y):
+            # Create 2 x num_points array of source points
+            x_points, y_points = tf.meshgrid(
+                tf.linspace(-1.0, 1.0, grid_size_x),
+                tf.linspace(-1.0, 1.0, grid_size_y))
+            x_flat = tf.reshape(x_points, (1,-1))
+            y_flat = tf.reshape(y_points, (1,-1))
+            points = tf.concat(0, [x_flat, y_flat])
+            return points
 
-        # Initialize L to be num_equations square matrix
+        source_points = get_meshgrid(grid_size, grid_size)
+    
+        tL = ElasticTransformer.U_func(tf.expand_dims(source_points, 2), tf.expand_dims(source_points, 1))
+
+        # Initialize L 
         L_top = tf.concat(1, [tf.zeros([2,3]), source_points])
-        L_mid = tf.concat(1, [tf.zeros([1, 2]), tf.ones([1, num_equations-2])])
-        L_bot = tf.concat(1, [tf.transpose(source_points), tf.ones([num_equations-3, 1]), tL])
+        L_mid = tf.concat(1, [tf.zeros([1, 2]), tf.ones([1, self.num_control_points+1])])
+        L_bot = tf.concat(1, [tf.transpose(source_points), tf.ones([self.num_control_points, 1]), tL])
 
         L = tf.concat(0, [L_top, L_mid, L_bot])
         L_inv = tf.matrix_inverse(L)
     
         with tf.variable_scope(self.name):
             # Construct grid
-            x_t, y_t = tf.meshgrid(tf.linspace(-1.0, 1.0, self.out_size[1]),
-                                   tf.linspace(-1.0, 1.0, self.out_size[0]))
-            x_t_flat = tf.reshape(x_t, (1,-1))
-            y_t_flat = tf.reshape(y_t, (1,-1))
-            orig_grid = tf.concat(0, [x_t_flat, y_t_flat])
+            orig_grid = get_meshgrid(self.out_size[1], self.out_size[0])
     
             # Construct right mat
-    
-            # First Calculate the U function for the new point and each source
-            # point as in ref [5]_
-            # The U function is simply U(r) = r^2 * log(r^2), where r^2 is the
-            # squared distance
             to_transform = tf.expand_dims(orig_grid, 2)
             stacked_source_points = tf.expand_dims(source_points, 1)
-
-            r_2 = tf.transpose(tf.reduce_sum(tf.square(to_transform - stacked_source_points), axis=0))
-            # Take the product (r^2 * log(r^2)), being careful to avoid NaNs
-            log_r_2 = tf.log(r_2)
-            log_r_2 = tf.where(tf.is_inf(log_r_2), tf.zeros_like(log_r_2), log_r_2)
-            distances = r_2 * log_r_2
+            distances = ElasticTransformer.U_func(to_transform, stacked_source_points)
     
             # Add in the coefficients for the affine translation (1, x, and y,
             # corresponding to a_1, a_x, and a_y)
-            ones = tf.ones(shape=[1, orig_grid.get_shape().as_list()[1]])
+            ones = tf.ones(shape=[1, distances.get_shape().as_list()[1]])
             right_mat_top = orig_grid
             right_mat_bottom = tf.concat(0, [ones, distances])
             L_inv = tf.transpose(L_inv[:,3:])

@@ -38,7 +38,6 @@ outsize = (int(im.shape[0]), int(im.shape[1]))
 
 # Elastic Transformation Layer
 stl = ElasticTransformer(outsize)
-print(stl.param_dim)
 
 theta = tf.get_variable('theta', [batch_size, stl.param_dim], trainable=False)
 # Run session
@@ -50,10 +49,9 @@ with tf.Session() as sess:
         #cur_theta = 0.0 + 0.2*np.random.randn(1, stl.param_dim)
         #cur_theta = np.repeat(cur_theta, batch_size, axis=0)
         side_dim = np.floor(np.sqrt(stl.param_dim//2))
-        print(side_dim)
         for i in range(stl.param_dim//2):
             if i<side_dim or i>=(side_dim-1)*side_dim or i%side_dim==0 or i%side_dim==side_dim-1:
-                print(i)
+                #print(i)
                 cur_theta[:,i] = 0.0
                 cur_theta[:,stl.param_dim//2 + i] = 0.0
         result = stl.transform(x, theta)

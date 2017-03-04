@@ -23,6 +23,7 @@ References
 """
 
 import tensorflow as tf
+import math
 
 
 """
@@ -237,7 +238,18 @@ class ElasticTransformer(object):
         self.num_control_points = num_control_points
 
         self.out_size = out_size
-        self.right_mat_top, self.right_mat_bottom, self.L_inv, self.source_points =  self._initialize_tps() 
+
+        self.grid_size = math.floor(math.sqrt(self.num_control_points))
+        assert self.grid_size*self.grid_size == self.num_control_points, 'num_control_points must be a square of an int'
+
+        with tf.variable_scope(self.name):
+            # Create source grid
+            self.source_points = ElasticTransformer.get_meshgrid(self.grid_size, self.grid_size)
+            # Construct pixel grid
+            self.pixel_grid = ElasticTransformer.get_meshgrid(self.out_size[1], self.out_size[0])
+            self.num_pixels = self.out_size[0]*self.out_size[1]
+
+            self.pixel_distances, self.L_inv =  self._initialize_tps(self.source_points, self.pixel_grid)
 
 
 
@@ -276,9 +288,6 @@ class ElasticTransformer(object):
     def _transform(self, U, theta, forward=True):
         with tf.variable_scope(self.name + '_elastic_transform'):
             batch_size = U.get_shape().as_list()[0]
-
-            out_height = self.out_size[0]
-            out_width = self.out_size[1]
     
             # reshape destination offsets to be (batch_size, 2, num_control_points)
             # and add to source_points
@@ -291,10 +300,10 @@ class ElasticTransformer(object):
             coefficients = tf.reshape(coefficients, [-1, 2, self.num_control_points+3])
 
             # Transform each point on the source grid (image_size x image_size)
-            right_mat = tf.concat(0, [self.right_mat_top, self.right_mat_bottom])
+            right_mat = tf.concat(0, [self.pixel_grid, self.pixel_distances])
             right_mat = tf.tile(tf.expand_dims(right_mat, 0), (batch_size, 1, 1))
             transformed_points = tf.batch_matmul(coefficients, right_mat)
-            transformed_points = tf.reshape(transformed_points, [-1, 2, out_height*out_width])
+            transformed_points = tf.reshape(transformed_points, [-1, 2, self.num_pixels])
     
             x_s_flat = tf.reshape(transformed_points[:,0,:], [-1])
             y_s_flat = tf.reshape(transformed_points[:,1,:], [-1])
@@ -314,8 +323,19 @@ class ElasticTransformer(object):
         #phi = tf.sqrt(r_sq)
         return phi
 
-    def _initialize_tps(self):
-        import numpy as np
+    
+    def get_meshgrid(grid_size_x, grid_size_y):
+        # Create 2 x num_points array of source points
+        x_points, y_points = tf.meshgrid(
+            tf.linspace(-1.0, 1.0, grid_size_x),
+            tf.linspace(-1.0, 1.0, grid_size_y))
+        x_flat = tf.reshape(x_points, (1,-1))
+        y_flat = tf.reshape(y_points, (1,-1))
+        points = tf.concat(0, [x_flat, y_flat])
+        return points
+
+
+    def _initialize_tps(self, source_points, pixel_grid):
         """
         Initializes the thin plate spline calculation by creating the source
         point array and the inverted L matrix used for calculating the
@@ -332,22 +352,6 @@ class ElasticTransformer(object):
 
         """
     
-        # Create source grid
-        grid_size = np.floor(np.sqrt(self.num_control_points))
-        assert grid_size*grid_size == self.num_control_points, 'num_control_points must be a square of an int'
-    
-        def get_meshgrid(grid_size_x, grid_size_y):
-            # Create 2 x num_points array of source points
-            x_points, y_points = tf.meshgrid(
-                tf.linspace(-1.0, 1.0, grid_size_x),
-                tf.linspace(-1.0, 1.0, grid_size_y))
-            x_flat = tf.reshape(x_points, (1,-1))
-            y_flat = tf.reshape(y_points, (1,-1))
-            points = tf.concat(0, [x_flat, y_flat])
-            return points
-
-        source_points = get_meshgrid(grid_size, grid_size)
-    
         tL = ElasticTransformer.U_func(tf.expand_dims(source_points, 2), tf.expand_dims(source_points, 1))
 
         # Initialize L 
@@ -358,23 +362,18 @@ class ElasticTransformer(object):
         L = tf.concat(0, [L_top, L_mid, L_bot])
         L_inv = tf.matrix_inverse(L)
     
-        with tf.variable_scope(self.name):
-            # Construct grid
-            orig_grid = get_meshgrid(self.out_size[1], self.out_size[0])
+        # Construct right mat
+        to_transform = tf.expand_dims(pixel_grid, 2)
+        stacked_source_points = tf.expand_dims(source_points, 1)
+        distances = ElasticTransformer.U_func(to_transform, stacked_source_points)
     
-            # Construct right mat
-            to_transform = tf.expand_dims(orig_grid, 2)
-            stacked_source_points = tf.expand_dims(source_points, 1)
-            distances = ElasticTransformer.U_func(to_transform, stacked_source_points)
-    
-            # Add in the coefficients for the affine translation (1, x, and y,
-            # corresponding to a_1, a_x, and a_y)
-            ones = tf.ones(shape=[1, distances.get_shape().as_list()[1]])
-            right_mat_top = orig_grid
-            right_mat_bottom = tf.concat(0, [ones, distances])
-            L_inv = tf.transpose(L_inv[:,3:])
+        # Add in the coefficients for the affine translation (1, x, and y,
+        # corresponding to a_1, a_x, and a_y)
+        ones = tf.ones(shape=[1, self.num_pixels])
+        pixel_distances = tf.concat(0, [ones, distances])
+        L_inv = tf.transpose(L_inv[:,3:])
 
-        return right_mat_top, right_mat_bottom, L_inv, source_points
+        return pixel_distances, L_inv
 
 
 

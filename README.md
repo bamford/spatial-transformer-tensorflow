@@ -66,8 +66,23 @@ example_elastic.py shows how to use ElasticTransformer. Here, deformations are d
 </div>
 
 
-### Misc
-example_interp.py shows that interpolation doesn't have the bug at the edges, as in [2] and [3]. See https://github.com/tensorflow/models/issues/193 for details.
+### Bilinear and Bicubic Interpolation
+example_interp.py shows how to use Bilinear and Bicubic interpolation methods.
+
+Bilinear:
+<div align="center">
+  <img src="imgs/interp_bilinear_stn.png">
+  <img src="imgs/interp_bilinear_tf.png">
+  <img src="imgs/interp_diff_bilinear.png">
+</div>
+
+<div align="center">
+  <img src="imgs/interp_bicubic_stn.png">
+  <img src="imgs/interp_bicubic_tf.png">
+  <img src="imgs/interp_diff_bicubic.png">
+</div>
+
+Also, the interpolation doesn't have the bug at the edges, as in [2] and [3]. See https://github.com/tensorflow/models/issues/193 for details.
 
 
 ## References

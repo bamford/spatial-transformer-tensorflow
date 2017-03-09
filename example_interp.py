@@ -55,12 +55,12 @@ scipy.misc.imsave('interp_bilinear_tf.png', result_bilinear_tf_[0])
 scipy.misc.imsave('interp_bicubic_tf.png', result_bicubic_tf_[0])
 
 # save differences
-diff_bilinear = result_bilinear_[0] - result_bilinear_tf_[0]
+diff_bilinear = np.abs(result_bilinear_[0] - result_bilinear_tf_[0])
 diff_bilinear = diff_bilinear - np.amin(diff_bilinear)
-#diff_bilinear = diff_bilinear/(0.0001 + np.amax(diff_bilinear))
+diff_bilinear = diff_bilinear/(0.0001 + np.amax(diff_bilinear))
 scipy.misc.imsave('interp_diff_bilinear.png', diff_bilinear)
-diff_bicubic = result_bicubic_[0] - result_bicubic_tf_[0]
+diff_bicubic = np.abs(result_bicubic_[0] - result_bicubic_tf_[0])
 diff_bicubic = diff_bicubic - np.amin(diff_bicubic)
-#diff_bicubic = diff_bicubic/(0.0001 + np.amax(diff_bicubic))
+diff_bicubic = diff_bicubic/(0.0001 + np.amax(diff_bicubic))
 scipy.misc.imsave('interp_diff_bicubic.png', diff_bicubic)
 

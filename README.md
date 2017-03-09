@@ -71,14 +71,21 @@ example_interp.py shows how to use Bilinear and Bicubic interpolation methods.
 
 Bilinear:
 <div align="center">
+  Spatial Transformer Output:<br />
   <img src="imgs/interp_bilinear_stn.png">
+  Tensorflow Output:<br />
   <img src="imgs/interp_bilinear_tf.png">
+  Normalized absolute difference:<br />
   <img src="imgs/interp_diff_bilinear.png">
 </div>
 
+Bicubic:
 <div align="center">
+  Spatial Transformer Output:<br />
   <img src="imgs/interp_bicubic_stn.png">
+  Tensorflow Output:<br />
   <img src="imgs/interp_bicubic_tf.png">
+  Normalized absolute difference:<br />
   <img src="imgs/interp_diff_bicubic.png">
 </div>
 

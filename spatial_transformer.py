@@ -274,9 +274,6 @@ class ElasticTransformer(object):
 
         """
         with tf.variable_scope(self.name):
-            print(self.source_points)
-            print(theta)
-    
             # reshape destination offsets to be (batch_size, 2, num_control_points)
             # and add to source_points
             source_points = tf.expand_dims(self.source_points, 0)
@@ -334,6 +331,7 @@ class ElasticTransformer(object):
             return x_s_flat, y_s_flat
 
     # U function for the new point and each source point 
+    @staticmethod
     def U_func(points1, points2):
         # The U function is simply U(r) = r^2 * log(r^2), as in ref [5]_,
         # where r is the euclidean distance
@@ -347,11 +345,12 @@ class ElasticTransformer(object):
         return phi
 
     
+    @staticmethod
     def get_meshgrid(grid_size_x, grid_size_y):
         # Create 2 x num_points array of source points
         x_points, y_points = tf.meshgrid(
-            tf.linspace(-1.0, 1.0, grid_size_x),
-            tf.linspace(-1.0, 1.0, grid_size_y))
+            tf.linspace(-1.0, 1.0, int(grid_size_x)),
+            tf.linspace(-1.0, 1.0, int(grid_size_y)))
         x_flat = tf.reshape(x_points, (1,-1))
         y_flat = tf.reshape(y_points, (1,-1))
         #points = tf.concat(0, [x_flat, y_flat]) # tensorflow 0.12
@@ -442,10 +441,12 @@ def _meshgrid(out_size):
 
 def _repeat(x, n_repeats):
     with tf.variable_scope('_repeat'):
-        rep = tf.transpose(tf.expand_dims(tf.ones(shape=[n_repeats, ]), 1), [1, 0])
-        rep = tf.cast(rep, tf.int32)
-        x = tf.matmul(tf.reshape(x, (-1, 1)), rep)
-        return tf.reshape(x, [-1])
+        #rep = tf.transpose(tf.expand_dims(tf.ones(shape=[n_repeats, ]), 1), [1, 0])
+        #rep = tf.cast(rep, tf.int32)
+        #x = tf.matmul(tf.reshape(x, (-1, 1)), rep)
+        #return tf.reshape(x, [-1])
+        rep = tf.tile(tf.expand_dims(x,1), [1, n_repeats])
+        return tf.reshape(rep, [-1])
 
 def _interpolate(im, x, y, out_size, method):
     if method=='bilinear':

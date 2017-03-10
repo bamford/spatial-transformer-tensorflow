@@ -104,20 +104,18 @@ class AffineVolumeTransformer(object):
         with tf.variable_scope(self.name + '_affine_volume_transform'):
             batch_size, _, _, _, num_channels = inp.get_shape().as_list()
 
+            print(theta)
             theta = tf.reshape(theta, (-1, 3, 4))
+            print(theta)
             voxel_grid = tf.tile(self.voxel_grid, [batch_size])
             voxel_grid = tf.reshape(voxel_grid, [batch_size, 4, -1])
     
             # Transform A x (x_t, y_t, z_t, 1)^T -> (x_s, y_s, z_s)
             T_g = tf.matmul(theta, voxel_grid)
             print(T_g)
-
             x_s = tf.slice(T_g, [0, 0, 0], [-1, 1, -1])
             y_s = tf.slice(T_g, [0, 1, 0], [-1, 1, -1])
             z_s = tf.slice(T_g, [0, 2, 0], [-1, 1, -1])
-            print(x_s)
-            print(y_s)
-            print(z_s)
 
             x_s_flat = tf.reshape(x_s, [-1])
             y_s_flat = tf.reshape(y_s, [-1])
@@ -512,9 +510,12 @@ def _meshgrid3d(out_size):
         #  ones = np.ones(np.prod(x_t.shape))
         #  grid = np.vstack([x_t.flatten(), y_t.flatten(), ones])
 
-        x_t, y_t, z_t = tf.meshgrid(tf.linspace(-1.0, 1.0,  out_size[2]),
+        z_t, y_t, x_t = tf.meshgrid(tf.linspace(-1.0, 1.0,  out_size[0]),
                                tf.linspace(-1.0, 1.0,  out_size[1]), 
-                               tf.linspace(-1.0, 1.0,  out_size[0]))
+                               tf.linspace(-1.0, 1.0,  out_size[2]), indexing='ij')
+        #x_t, y_t, z_t = tf.meshgrid(tf.linspace(-1.0, 1.0,  out_size[2]),
+        #                       tf.linspace(-1.0, 1.0,  out_size[1]), 
+        #                       tf.linspace(-1.0, 1.0,  out_size[0]), indexing='ij')
 
         x_t_flat = tf.reshape(x_t, (1, -1))
         y_t_flat = tf.reshape(y_t, (1, -1))

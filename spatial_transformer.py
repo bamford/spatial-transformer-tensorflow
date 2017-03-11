@@ -104,15 +104,12 @@ class AffineVolumeTransformer(object):
         with tf.variable_scope(self.name + '_affine_volume_transform'):
             batch_size, _, _, _, num_channels = inp.get_shape().as_list()
 
-            print(theta)
             theta = tf.reshape(theta, (-1, 3, 4))
-            print(theta)
             voxel_grid = tf.tile(self.voxel_grid, [batch_size])
             voxel_grid = tf.reshape(voxel_grid, [batch_size, 4, -1])
     
             # Transform A x (x_t, y_t, z_t, 1)^T -> (x_s, y_s, z_s)
             T_g = tf.matmul(theta, voxel_grid)
-            print(T_g)
             x_s = tf.slice(T_g, [0, 0, 0], [-1, 1, -1])
             y_s = tf.slice(T_g, [0, 1, 0], [-1, 1, -1])
             z_s = tf.slice(T_g, [0, 2, 0], [-1, 1, -1])
@@ -510,12 +507,13 @@ def _meshgrid3d(out_size):
         #  ones = np.ones(np.prod(x_t.shape))
         #  grid = np.vstack([x_t.flatten(), y_t.flatten(), ones])
 
-        z_t, y_t, x_t = tf.meshgrid(tf.linspace(-1.0, 1.0,  out_size[0]),
-                               tf.linspace(-1.0, 1.0,  out_size[1]), 
-                               tf.linspace(-1.0, 1.0,  out_size[2]), indexing='ij')
-        #x_t, y_t, z_t = tf.meshgrid(tf.linspace(-1.0, 1.0,  out_size[2]),
-        #                       tf.linspace(-1.0, 1.0,  out_size[1]), 
-        #                       tf.linspace(-1.0, 1.0,  out_size[0]), indexing='ij')
+        #z_t, y_t, x_t = tf.meshgrid(tf.linspace(0., out_size[0]-1.,  out_size[0]),
+        #                       tf.linspace(0., out_size[1]-1.,  out_size[1]), 
+        #                       tf.linspace(0., out_size[2]-1.,  out_size[2]), indexing='ij')
+
+        z_t, y_t, x_t = tf.meshgrid(tf.linspace(-1., 1.,  out_size[0]),
+                               tf.linspace(-1., 1.,  out_size[1]), 
+                               tf.linspace(-1., 1.,  out_size[2]), indexing='ij')
 
         x_t_flat = tf.reshape(x_t, (1, -1))
         y_t_flat = tf.reshape(y_t, (1, -1))
@@ -577,30 +575,38 @@ def _interpolate(im, x, y, out_size, method):
 def _interpolate3d(vol, x, y, z, out_size, method='bilinear'):
     return bilinear_interp3d(vol, x, y, z, out_size)
 
-def bilinear_interp3d(vol, x, y, z, out_size):
+def bilinear_interp3d(vol, x, y, z, out_size, edge_size=1):
     with tf.variable_scope('bilinear_interp3d'):
         batch_size, depth, height, width, channels = vol.get_shape().as_list()
+
+        if edge_size>0:
+            vol = tf.pad(vol, [[0,0], [edge_size,edge_size], [edge_size,edge_size], [edge_size,edge_size], [0,0]], mode='CONSTANT')
 
         x = tf.cast(x, tf.float32)
         y = tf.cast(y, tf.float32)
         z = tf.cast(z, tf.float32)
 
-        depth_f = tf.cast(depth, tf.float32)
+        depth_f  = tf.cast(depth, tf.float32)
         height_f = tf.cast(height, tf.float32)
-        width_f = tf.cast(width, tf.float32)
+        width_f  = tf.cast(width, tf.float32)
 
-        out_depth = out_size[0]
+        out_depth  = out_size[0]
         out_height = out_size[1]
-        out_width = out_size[2]
+        out_width  = out_size[2]
 
-        # scale indices from [-1, 1] to [0, width/height/depth - 1]
-        x = tf.clip_by_value(x, -1, 1)
-        y = tf.clip_by_value(y, -1, 1)
-        z = tf.clip_by_value(z, -1, 1)
+        # scale indices to [0, width/height/depth - 1]
+        x = (x + 1.) / 2. * (width_f  -1.)
+        y = (y + 1.) / 2. * (height_f -1.)
+        z = (z + 1.) / 2. * (depth_f  -1.)
 
-        x = (x + 1.0) / 2.0 * (width_f-1.0)
-        y = (y + 1.0) / 2.0 * (height_f-1.0)
-        z = (z + 1.0) / 2.0 * (depth_f-1.0)
+        # clip to to [0, width/height/depth - 1] +- edge_size
+        x = tf.clip_by_value(x, -edge_size, width_f  -1. + edge_size)
+        y = tf.clip_by_value(y, -edge_size, height_f -1. + edge_size)
+        z = tf.clip_by_value(z, -edge_size, depth_f  -1. + edge_size)
+
+        x += edge_size
+        y += edge_size
+        z += edge_size
 
         # do sampling
         x0_f = tf.floor(x)
@@ -614,13 +620,13 @@ def bilinear_interp3d(vol, x, y, z, out_size):
         y0 = tf.cast(y0_f, tf.int32)
         z0 = tf.cast(z0_f, tf.int32)
 
-        x1 = tf.cast(tf.minimum(x1_f, width_f - 1),  tf.int32)
-        y1 = tf.cast(tf.minimum(y1_f, height_f - 1), tf.int32)
-        z1 = tf.cast(tf.minimum(z1_f, depth_f - 1), tf.int32)
+        x1 = tf.cast(tf.minimum(x1_f, width_f  - 1. + 2*edge_size),  tf.int32)
+        y1 = tf.cast(tf.minimum(y1_f, height_f - 1. + 2*edge_size), tf.int32)
+        z1 = tf.cast(tf.minimum(z1_f, depth_f  - 1. + 2*edge_size), tf.int32)
 
-        dim3 = width
-        dim2 = width*height
-        dim1 = width*height*depth
+        dim3 = (width + 2*edge_size)
+        dim2 = (width + 2*edge_size)*(height + 2*edge_size)
+        dim1 = (width + 2*edge_size)*(height + 2*edge_size)*(depth + 2*edge_size)
 
         base = _repeat(tf.range(batch_size)*dim1, out_depth*out_height*out_width)
         base_z0 = base + z0*dim2

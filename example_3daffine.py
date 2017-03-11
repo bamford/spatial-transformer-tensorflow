@@ -10,12 +10,10 @@ import binvox_rw
 with open('data/model.binvox', 'rb') as f:
     model = binvox_rw.read_as_3d_array(f)
 
-print(model.axis_order)
-
 vol = model.data.copy().astype(np.float32)
 
 # input batch
-batch_size = 5
+batch_size = 8
 batch = np.expand_dims(vol, axis=3)
 batch = np.expand_dims(batch, axis=0)
 batch = np.tile(batch, [batch_size, 1, 1, 1, 1])
@@ -54,7 +52,6 @@ def transmat(phi, theta, psi, shiftmat=None):
     if shiftmat.ndim==1:
         shiftmat = np.expand_dims(shiftmat, axis=1)
     transmat = np.concatenate([rotmat, shiftmat],1)
-    print(transmat)
     return transmat.flatten().astype(np.float32)
 
 # Run session
@@ -65,8 +62,8 @@ with tf.Session() as sess:
             theta_ = np.zeros([batch_size, stl.param_dim], dtype=np.float32)
             angle_step = 2*np.pi/batch_size
             for i in xrange(batch_size):
-                #theta_[i,:] = transmat(0, 0, i*angle_step)
-                theta_[i,:] = transmat(0, 0, 0, np.array([0, 0, 0.5*i]))
+                theta_[i,:] = transmat(0, 0, i*angle_step)
+                #theta_[i,:] = transmat(0, 0, 0, np.array([0, 0, 0.5*i]))
                 #theta_[i,:] = transmat(0, 0, 0)
             theta = tf.convert_to_tensor(theta_)
             #theta = initial + 0.1*tf.random_normal([batch_size, stl.param_dim])
@@ -76,6 +73,7 @@ with tf.Session() as sess:
         batch = np.transpose(batch, [0,3,2,1,4])
         result_ = sess.run(result, feed_dict={x: batch})
         result_ = np.transpose(result_, [0,3,2,1,4])
+        print(result_.shape)
 
 # save our result
 for i in range(result_.shape[0]):

@@ -72,7 +72,6 @@ def get_rot_diff(transmat_src, transmat_trg):
 
 
 cur_angles = 2*np.pi*(2*(np.random.rand(1, 3)-0.5))
-#cur_angles = np.zeros([1, 3])
 cur_theta1 = transmat(cur_angles[0,0], cur_angles[0,1], cur_angles[0,2])
 # Run session
 with tf.Session() as sess:
@@ -80,7 +79,7 @@ with tf.Session() as sess:
         with tf.variable_scope('spatial_transformer') as scope:
             theta_canonical = np.tile(np.expand_dims(cur_theta1, axis=0), [batch_size, 1])
 
-            theta_random = np.zeros([batch_size, stl.param_dim], dtype=np.float32)
+            theta_random = np.zeros([batch_size, 3], dtype=np.float32)
             random_angles = 2*np.pi*(2*(np.random.rand(batch_size,3)-0.5))
             for i in xrange(batch_size):
                 cur_theta = transmat(random_angles[i,0], random_angles[i,1], random_angles[i,2])

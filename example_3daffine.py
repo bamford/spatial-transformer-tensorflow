@@ -106,12 +106,16 @@ with tf.Session(config=tf.ConfigProto(device_count={'GPU':0})) as sess:
 
 # save our result
 def save_binvox(cur_vol, name):
+    #print(model.dims)
+    #print(model.translate)
+    #print(model.scale)
+    #print(model.axis_order)
     cur_model = binvox_rw.Voxels(
             data=cur_vol, 
-            dims=model.dims, 
-            translate=model.translate, 
-            scale=model.scale, 
-            axis_order=model.axis_order)
+            dims=list(cur_vol.shape), 
+            translate=[0,0,0], 
+            scale=1.0, 
+            axis_order='xyz')
     with open(name + '.binvox', 'wb') as f:
         cur_model.write(f)
 

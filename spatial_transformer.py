@@ -171,7 +171,7 @@ class AffineTransformer(object):
         """
         with tf.variable_scope(self.name):
             x_s, y_s = self._transform(inp, theta)
-    
+
             output = _interpolate(
                 inp, x_s, y_s,
                 self.out_size,
@@ -558,10 +558,6 @@ def _meshgrid(out_size):
 
 def _repeat(x, n_repeats):
     with tf.variable_scope('_repeat'):
-        #rep = tf.transpose(tf.expand_dims(tf.ones(shape=[n_repeats, ]), 1), [1, 0])
-        #rep = tf.cast(rep, tf.int32)
-        #x = tf.matmul(tf.reshape(x, (-1, 1)), rep)
-        #return tf.reshape(x, [-1])
         rep = tf.tile(tf.expand_dims(x,1), [1, n_repeats])
         return tf.reshape(rep, [-1])
 
@@ -710,29 +706,33 @@ def bilinear_interp(im, x, y, out_size):
 
         dim2 = width
         dim1 = width*height
+       
         base = _repeat(tf.range(batch_size)*dim1, out_height*out_width)
+
         base_y0 = base + y0*dim2
         base_y1 = base + y1*dim2
 
-        idx_a = base_y0 + x0
-        idx_b = base_y1 + x0
-        idx_c = base_y0 + x1
-        idx_d = base_y1 + x1
+        idx_00 = base_y0 + x0
+        idx_01 = base_y0 + x1
+        idx_10 = base_y1 + x0
+        idx_11 = base_y1 + x1
 
         # use indices to lookup pixels in the flat image and restore
         # channels dim
         im_flat = tf.reshape(im, [-1, channels])
-        Ia = tf.gather(im_flat, idx_a)
-        Ib = tf.gather(im_flat, idx_b)
-        Ic = tf.gather(im_flat, idx_c)
-        Id = tf.gather(im_flat, idx_d)
+
+        I00 = tf.gather(im_flat, idx_00)
+        I01 = tf.gather(im_flat, idx_01)
+        I10 = tf.gather(im_flat, idx_10)
+        I11 = tf.gather(im_flat, idx_11)
 
         # and finally calculate interpolated values
-        wa = tf.expand_dims(((x1_f-x) * (y1_f-y)), 1)
-        wb = tf.expand_dims(((x1_f-x) * (y-y0_f)), 1)
-        wc = tf.expand_dims(((x-x0_f) * (y1_f-y)), 1)
-        wd = tf.expand_dims(((x-x0_f) * (y-y0_f)), 1)
-        output = tf.add_n([wa*Ia, wb*Ib, wc*Ic, wd*Id])
+        w00 = tf.expand_dims(((x1_f-x) * (y1_f-y)), 1)
+        w01 = tf.expand_dims(((x-x0_f) * (y1_f-y)), 1)
+        w10 = tf.expand_dims(((x1_f-x) * (y-y0_f)), 1)
+        w11 = tf.expand_dims(((x-x0_f) * (y-y0_f)), 1)
+
+        output = tf.add_n([w00*I00, w01*I01, w10*I10, w11*I11])
         return output
 
 
@@ -756,6 +756,7 @@ def bicubic_interp(im, x, y, out_size):
         out_height = out_size[0]
         out_width = out_size[1]
 
+
         # scale indices from [-1, 1] to [0, width/height - 1]
         x = tf.clip_by_value(x, -1, 1)
         y = tf.clip_by_value(y, -1, 1)
@@ -774,8 +775,8 @@ def bicubic_interp(im, x, y, out_size):
         yp2_f = y0_f + 2
 
         # clipped integer coordinates
-        xs = [0]*4
-        ys = [0]*4
+        xs = [0, 0, 0, 0]
+        ys = [0, 0, 0, 0]
         xs[0] = tf.cast(x0_f, tf.int32)
         ys[0] = tf.cast(y0_f, tf.int32)
         xs[1] = tf.cast(tf.maximum(xm1_f, 0), tf.int32)
@@ -840,4 +841,5 @@ def bicubic_interp(im, x, y, out_size):
 
         output = tf.add_n(y_interp)
         return output
+
 

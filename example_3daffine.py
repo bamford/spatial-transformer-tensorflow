@@ -4,11 +4,75 @@ from spatial_transformer import AffineVolumeTransformer
 import numpy as np
 import scipy.misc
 import binvox_rw
+import sys
+
+def read_binvox(f):
+    class Model:
+        pass
+
+    model = Model()
+
+    line = f.readline().strip()
+    if not line.startswith(b'#binvox'):
+        raise IOError('Not a binvox file')
+
+    model.dims = list(map(int, f.readline().strip().split(b' ')[1:]))
+    model.translate = list(map(float, f.readline().strip().split(b' ')[1:]))
+    model.scale = float(f.readline().strip().split(b' ')[1])
+
+    _ = f.readline()
+    raw_data = np.frombuffer(f.read(), dtype=np.uint8)
+    values, counts = raw_data[::2], raw_data[1::2]
+
+    # xzy (binvox) -> zyx (tensorflow)
+    model.data = np.transpose(np.repeat(values, counts).astype(np.bool).reshape(model.dims), (1,2,0))
+
+    # zxy -> zyx (should all be equal, so doesn't matter)
+    model.dims = [model.dims[i] for i in [0,2,1]]
+    return model
+
+def write_binvox(model, f):
+    f.write(b'#binvox 1\n')
+    f.write(('dim '+' '.join(map(str, [model.dims[i] for i in [0,2,1]]))+'\n').encode())
+    f.write(('translate '+' '.join(map(str, model.translate))+'\n').encode())
+    f.write(('scale'+str(model.scale)+'\n').encode())
+    f.write(b'data\n')
+
+    # zyx (tensorflow) -> xzy (binvox)
+    voxels = np.transpose(model.data, (2, 0, 1)).flatten()
+
+    # run length encoding
+    value = voxels[0]
+    count = 0
+
+    def dump():
+        if sys.version_info[0] < 3:
+            # python 2
+            f.write(chr(value))
+            f.write(chr(count))
+        else:
+            # python 3
+            f.write(bytes((value,)))
+            f.write(bytes((count,)))
+
+    for curval in voxels:
+        if curval==value:
+            count += 1
+            if count==255:
+                dump()
+                count = 0
+        else:
+            dump()
+            value = curval
+            count = 1
+    if count > 0:
+        dump()
+
 
 # Input image retrieved from:
 # https://raw.githubusercontent.com/skaae/transformer_network/master/cat.jpg
 with open('data/model.binvox', 'rb') as f:
-    model = binvox_rw.read_as_3d_array(f)
+    model = read_binvox(f)
 
 vol = model.data.copy().astype(np.float32)
 pad_size = 12
@@ -16,7 +80,7 @@ vol = np.pad(vol, pad_width=[[pad_size,pad_size], [pad_size,pad_size], [pad_size
 model.dims = (np.array(model.dims) + 2*pad_size).tolist()
 
 # input batch
-batch_size = 5
+batch_size = 3
 batch = np.expand_dims(vol, axis=3)
 batch = np.expand_dims(batch, axis=0)
 batch = np.tile(batch, [batch_size, 1, 1, 1, 1])
@@ -60,72 +124,39 @@ def transmat(phi, theta, psi, shiftmat=None):
     transmat = np.concatenate([rotmat, shiftmat],2)
     return np.reshape(transmat, [batch_size, -1]).astype(np.float32)
 
-def get_rot_diff(transmat_src, transmat_trg):
-    transmat_src = np.reshape(transmat_src, [3,4])
-    transmat_trg = np.reshape(transmat_trg, [3,4])
-    R_src = transmat_src[:,0:3]
-    t_src = transmat_src[:,3:4]
-    R_trg = transmat_trg[:,0:3]
-    t_trg = transmat_trg[:,3:4]
-    R_res = np.dot(R_src.T, R_trg)
-    t_res = -t_src + t_trg
-    result = np.concatenate([R_res, t_res], 1)
-    return result.flatten()
 
-
-cur_angles = 2*np.pi*(2*(np.random.rand(1, 3)-0.5))
-cur_theta1 = transmat(cur_angles[:,0], cur_angles[:,1], cur_angles[:,2])
-print(cur_theta1.shape)
 # Run session
 with tf.Session(config=tf.ConfigProto(device_count={'GPU':0})) as sess:
     with tf.device("/cpu:0"):
         with tf.variable_scope('spatial_transformer') as scope:
-            theta_canonical = np.tile(cur_theta1, [batch_size, 1])
-
-            random_angles = 2*np.pi*(2*(np.random.rand(batch_size,3)-0.5))
-            theta_random = transmat(random_angles[:,0], random_angles[:,1], random_angles[:,2])
-            print(theta_random.shape)
-
-            theta_inverse = np.zeros([batch_size, stl.param_dim], dtype=np.float32)
-            for i in xrange(batch_size):
-                cur_theta = get_rot_diff(theta_random[i,:], theta_canonical[i,:])
-                theta_inverse[i,:] = cur_theta
+            random_angles = np.pi*(2*(np.random.rand(batch_size,3)-0.5))
+            shifts = (np.random.rand(batch_size,3,1)-0.5)
+            theta_random = transmat(random_angles[:,0], random_angles[:,1], random_angles[:,2], shifts)
 
             transformed = stl.transform(x, theta)
 
         sess.run(tf.global_variables_initializer())
-        batch = np.transpose(batch, [0,3,2,1,4])
-
-        x_canonical = sess.run(transformed, feed_dict={x: batch, theta: theta_canonical})
         x_random = sess.run(transformed, feed_dict={x: batch, theta: theta_random})
-        x_inverse = sess.run(transformed, feed_dict={x: x_random, theta: theta_inverse})
 
-        x_canonical = np.transpose(x_canonical, [0,3,2,1,4])
-        x_random = np.transpose(x_random, [0,3,2,1,4])
-        x_inverse = np.transpose(x_inverse, [0,3,2,1,4])
 
-# save our result
-def save_binvox(cur_vol, name):
+class Model:
+    pass
+model = Model()
+
+for i in range(batch_size):
+    cur_vol = x_random[i,:,:,:,0]>0.5 # binary
+
+    model.dims = list(cur_vol.shape)
+    model.data = cur_vol
+    model.translate = [0,0,0]
+    model.scale = 1.0
+
     #print(model.dims)
     #print(model.translate)
     #print(model.scale)
     #print(model.axis_order)
-    cur_model = binvox_rw.Voxels(
-            data=cur_vol, 
-            dims=list(cur_vol.shape), 
-            translate=[0,0,0], 
-            scale=1.0, 
-            axis_order='xyz')
-    with open(name + '.binvox', 'wb') as f:
-        cur_model.write(f)
 
-cur_vol = x_canonical[0,:,:,:,0]>0.5 # binary
-save_binvox(cur_vol, 'model_canonical')
-
-for i in range(batch_size):
-    cur_vol = x_random[i,:,:,:,0]>0.5 # binary
-    save_binvox(cur_vol, 'model_' + str(i) + 'random')
-    cur_vol = x_inverse[i,:,:,:,0]>0.5 # binary
-    save_binvox(cur_vol, 'model_' + str(i) + 'inverse')
+    with open('model_' + str(i) + 'random.binvox', 'wb') as f:
+        write_binvox(model, f)
 
 

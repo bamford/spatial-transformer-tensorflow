@@ -271,7 +271,6 @@ class ProjectiveTransformer(object):
             batch_size, _, _, num_channels = inp.get_shape().as_list()
 
             theta = tf.reshape(theta, (batch_size, 8))
-            #theta = tf.concat(1, [theta, tf.ones([batch_size, 1])]) # tensorflow 0.12
             theta = tf.concat([theta, tf.ones([batch_size, 1])], 1)
             theta = tf.reshape(theta, (batch_size, 3, 3))
 
@@ -279,7 +278,6 @@ class ProjectiveTransformer(object):
             pixel_grid = tf.reshape(pixel_grid, [batch_size, 3, -1])
     
             # Transform A x (x_t, y_t, 1)^T -> (x_s, y_s)
-            #T_g = tf.batch_matmul(theta, pixel_grid) # tensorflow 0.12
             T_g = tf.matmul(theta, pixel_grid)
             x_s = tf.slice(T_g, [0, 0, 0], [-1, 1, -1])
             y_s = tf.slice(T_g, [0, 1, 0], [-1, 1, -1])
@@ -401,10 +399,8 @@ class ElasticTransformer(object):
             coefficients = tf.reshape(coefficients, [-1, 2, num_control_points+3])
 
             # Transform each point on the target grid (out_size)
-            #right_mat = tf.concat(0, [pixel_grid, pixel_distances]) # tensorflow 0.12
             right_mat = tf.concat([pixel_grid, pixel_distances], 0)
             right_mat = tf.tile(tf.expand_dims(right_mat, 0), (batch_size, 1, 1))
-            #transformed_points = tf.batch_matmul(coefficients, right_mat) # tensorflow 0.12
             transformed_points = tf.matmul(coefficients, right_mat)
             transformed_points = tf.reshape(transformed_points, [-1, 2, num_pixels])
     
@@ -436,7 +432,6 @@ class ElasticTransformer(object):
             tf.linspace(-1.0, 1.0, int(grid_size_y)))
         x_flat = tf.reshape(x_points, (1,-1))
         y_flat = tf.reshape(y_points, (1,-1))
-        #points = tf.concat(0, [x_flat, y_flat]) # tensorflow 0.12
         points = tf.concat([x_flat, y_flat], 0)
         return points
 
@@ -461,11 +456,6 @@ class ElasticTransformer(object):
         tL = ElasticTransformer.U_func(tf.expand_dims(source_points, 2), tf.expand_dims(source_points, 1))
 
         # Initialize L 
-        #L_top = tf.concat(1, [tf.zeros([2,3]), source_points]) # tensorflow 0.12
-        #L_mid = tf.concat(1, [tf.zeros([1, 2]), tf.ones([1, self.num_control_points+1])]) # tensorflow 0.12
-        #L_bot = tf.concat(1, [tf.transpose(source_points), tf.ones([self.num_control_points, 1]), tL]) # tensorflow 0.12
-
-        #L = tf.concat(0, [L_top, L_mid, L_bot]) # tensorflow 0.12
         L_top = tf.concat([tf.zeros([2,3]), source_points], 1)
         L_mid = tf.concat([tf.zeros([1, 2]), tf.ones([1, self.num_control_points+1])], 1)
         L_bot = tf.concat([tf.transpose(source_points), tf.ones([self.num_control_points, 1]), tL], 1)
@@ -481,7 +471,6 @@ class ElasticTransformer(object):
         # Add in the coefficients for the affine translation (1, x, and y,
         # corresponding to a_1, a_x, and a_y)
         ones = tf.ones(shape=[1, self.num_pixels])
-        #pixel_distances = tf.concat(0, [ones, distances]) # tensorflow 0.12
         pixel_distances = tf.concat([ones, distances], 0)
         L_inv = tf.transpose(L_inv[:,3:])
 
@@ -521,9 +510,6 @@ def _meshgrid3d(out_size):
 
         ones = tf.ones_like(x_t_flat)
         grid = tf.concat([x_t_flat, y_t_flat, z_t_flat, ones], 0)
-
-        # Tiling for batches
-        grid = tf.expand_dims(grid, 0)
         grid = tf.reshape(grid, [-1])
         return grid
 
@@ -546,13 +532,9 @@ def _meshgrid(out_size):
         x_t_flat = tf.reshape(x_t, (1, -1))
         y_t_flat = tf.reshape(y_t, (1, -1))
 
-        ones = tf.ones_like(x_t_flat)
-        #grid = tf.concat(0, [x_t_flat, y_t_flat, ones]) # tensorflow 0.12
-        grid = tf.concat([x_t_flat, y_t_flat, ones], 0)
-
-        # Tiling for batches
-        grid = tf.expand_dims(grid, 0)
+        grid = tf.concat([x_t_flat, y_t_flat, tf.ones_like(x_t_flat)], 0)
         grid = tf.reshape(grid, [-1])
+
         return grid
 
 

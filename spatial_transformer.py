@@ -92,9 +92,14 @@ class AffineVolumeTransformer(object):
                 self.out_size,
                 method=self.interp_method
                 )
-    
-            batch_size, _, _, _, num_channels = inp.get_shape().as_list()
-            output = tf.reshape(output, [batch_size, self.out_size[0], self.out_size[1], self.out_size[2], num_channels])
+
+            shape = tf.shape(inp)
+            outshape = tf.stack([shape[0],
+                                 self.out_size[0],
+                                 self.out_size[1],
+                                 self.out_size[2],
+                                 shape[4]])
+            output = tf.reshape(output, outshape)
 
         return output
 
@@ -102,12 +107,12 @@ class AffineVolumeTransformer(object):
     
     def _transform(self, inp, theta):
         with tf.variable_scope(self.name + '_affine_volume_transform'):
-            batch_size, _, _, _, num_channels = inp.get_shape().as_list()
+            batch_size = tf.shape(inp)[0]
 
             theta = tf.reshape(theta, (-1, 3, 4))
-            voxel_grid = tf.tile(self.voxel_grid, [batch_size])
-            voxel_grid = tf.reshape(voxel_grid, [batch_size, 4, -1])
-    
+            voxel_grid = tf.tile(self.voxel_grid, tf.stack([batch_size]))
+            voxel_grid = tf.reshape(voxel_grid, tf.stack([batch_size, 4, -1]))
+
             # Transform A x (x_t, y_t, z_t, 1)^T -> (x_s, y_s, z_s)
             T_g = tf.matmul(theta, voxel_grid)
             x_s = tf.slice(T_g, [0, 0, 0], [-1, 1, -1])
@@ -177,22 +182,23 @@ class AffineTransformer(object):
                 self.out_size,
                 method=self.interp_method
                 )
-    
-            batch_size, _, _, num_channels = inp.get_shape().as_list()
-            output = tf.reshape(output, [batch_size, self.out_size[0], self.out_size[1], num_channels])
+
+            shape = tf.shape(inp)
+            outshape = tf.stack([shape[0],
+                                 self.out_size[0],
+                                 self.out_size[1],
+                                 shape[3]])
+            output = tf.reshape(output, outshape)
 
         return output
 
-
-    
     def _transform(self, inp, theta):
         with tf.variable_scope(self.name + '_affine_transform'):
-            batch_size, _, _, num_channels = inp.get_shape().as_list()
-
+            batch_size = tf.shape(inp)[0]
             theta = tf.reshape(theta, (-1, 2, 3))
-            pixel_grid = tf.tile(self.pixel_grid, [batch_size])
-            pixel_grid = tf.reshape(pixel_grid, [batch_size, 3, -1])
-    
+            pixel_grid = tf.tile(self.pixel_grid, tf.stack([batch_size]))
+            pixel_grid = tf.reshape(pixel_grid, tf.stack([batch_size, 3, -1]))
+
             # Transform A x (x_t, y_t, 1)^T -> (x_s, y_s)
             T_g = tf.matmul(theta, pixel_grid)
             x_s = tf.slice(T_g, [0, 0, 0], [-1, 1, -1])
@@ -258,9 +264,13 @@ class ProjectiveTransformer(object):
                 self.out_size,
                 method=self.interp_method
                 )
-    
-            batch_size, _, _, num_channels = inp.get_shape().as_list()
-            output = tf.reshape(output, [batch_size, self.out_size[0], self.out_size[1], num_channels])
+
+            shape = tf.shape(inp)
+            outshape = tf.stack([shape[0],
+                                 self.out_size[0],
+                                 self.out_size[1],
+                                 shape[3]])
+            output = tf.reshape(output, outshape)
 
         return output
 
@@ -268,15 +278,15 @@ class ProjectiveTransformer(object):
     
     def _transform(self, inp, theta):
         with tf.variable_scope(self.name + '_projective_transform'):
-            batch_size, _, _, num_channels = inp.get_shape().as_list()
+            batch_size = tf.shape(inp)[0]
 
             theta = tf.reshape(theta, (batch_size, 8))
-            theta = tf.concat([theta, tf.ones([batch_size, 1])], 1)
-            theta = tf.reshape(theta, (batch_size, 3, 3))
+            theta = tf.concat([theta, tf.ones(tf.stack([batch_size, 1]))], 1)
+            theta = tf.reshape(theta, tf.stack([batch_size, 3, 3]))
 
-            pixel_grid = tf.tile(self.pixel_grid, [batch_size])
-            pixel_grid = tf.reshape(pixel_grid, [batch_size, 3, -1])
-    
+            pixel_grid = tf.tile(self.pixel_grid, tf.stack([batch_size]))
+            pixel_grid = tf.reshape(pixel_grid, tf.stack([batch_size, 3, -1]))
+
             # Transform A x (x_t, y_t, 1)^T -> (x_s, y_s)
             T_g = tf.matmul(theta, pixel_grid)
             x_s = tf.slice(T_g, [0, 0, 0], [-1, 1, -1])
@@ -358,8 +368,8 @@ class ElasticTransformer(object):
             # reshape destination offsets to be (batch_size, 2, num_control_points)
             # and add to source_points
             source_points = tf.expand_dims(self.source_points, 0)
-            theta = source_points + tf.reshape(theta, [-1, 2, self.num_control_points])
-    
+            theta = source_points + tf.cast(tf.reshape(theta, [-1, 2, self.num_control_points]), tf.float32)
+
             x_s, y_s = self._transform(
                     inp, theta, self.num_control_points, 
                     self.pixel_grid, self.num_pixels, 
@@ -384,14 +394,18 @@ class ElasticTransformer(object):
                     )
                 pass
 
-    
-        batch_size, _, _, num_channels = inp.get_shape().as_list()
-        output = tf.reshape(output, [batch_size, self.out_size[0], self.out_size[1], num_channels])
+        shape = tf.shape(inp)
+        outshape = tf.stack([shape[0],
+                             self.out_size[0],
+                             self.out_size[1],
+                             shape[3]])
+        output = tf.reshape(output, outshape)
+
         return output
 
     def _transform(self, inp, theta, num_control_points, pixel_grid, num_pixels, pixel_distances, L_inv, name, forward=True):
         with tf.variable_scope(name):
-            batch_size = inp.get_shape().as_list()[0]
+            batch_size = tf.shape(inp)[0]
 
             # Solve as in ref [2]
             theta = tf.reshape(theta, [-1, num_control_points])
@@ -555,7 +569,7 @@ def _interpolate3d(vol, x, y, z, out_size, method='bilinear'):
 
 def bilinear_interp3d(vol, x, y, z, out_size, edge_size=1):
     with tf.variable_scope('bilinear_interp3d'):
-        batch_size, depth, height, width, channels = vol.get_shape().as_list()
+        batch_size, depth, height, width, channels = tf.shape(vol)
 
         if edge_size>0:
             vol = tf.pad(vol, [[0,0], [edge_size,edge_size], [edge_size,edge_size], [edge_size,edge_size], [0,0]], mode='CONSTANT')
@@ -660,7 +674,7 @@ def bilinear_interp3d(vol, x, y, z, out_size, edge_size=1):
 
 def bilinear_interp(im, x, y, out_size):
     with tf.variable_scope('bilinear_interp'):
-        batch_size, height, width, channels = im.get_shape().as_list()
+        batch_size, height, width, channels = tf.shape(im)
 
         x = tf.cast(x, tf.float32)
         y = tf.cast(y, tf.float32)
@@ -729,7 +743,7 @@ def bicubic_interp(im, x, y, out_size):
             )
 
     with tf.variable_scope('bicubic_interp'):
-        batch_size, height, width, channels = im.get_shape().as_list()
+        batch_size, height, width, channels = tf.shape(im)
 
         x = tf.cast(x, tf.float32)
         y = tf.cast(y, tf.float32)

@@ -84,15 +84,10 @@ batch = np.expand_dims(vol, axis=3)
 batch = np.expand_dims(batch, axis=0)
 batch = np.tile(batch, [batch_size, 1, 1, 1, 1])
 
-# input placeholder
-# depth, height, width, in_channels
-x = tf.placeholder(tf.float32, [batch_size, vol.shape[0], vol.shape[1], vol.shape[2], 1])
-
 outsize = (int(vol.shape[0]), int(vol.shape[1]), int(vol.shape[2]))
 
 # Affine Transformation Layer
 stl = AffineVolumeTransformer(outsize)
-theta = tf.placeholder(tf.float32, [batch_size, stl.param_dim])
 
 # Identity transformation parameters
 initial = np.array([1.0, 0.0, 0.0, 0.0,
@@ -125,17 +120,14 @@ def transmat(phi, theta, psi, shiftmat=None):
 
 
 # Run session
-with tf.Session(config=tf.ConfigProto(device_count={'GPU':0})) as sess:
-    with tf.device("/cpu:0"):
-        with tf.variable_scope('spatial_transformer') as scope:
-            random_angles = np.pi*(2*(np.random.rand(batch_size,3)-0.5))
-            shifts = (np.random.rand(batch_size,3,1)-0.5)
-            theta_random = transmat(random_angles[:,0], random_angles[:,1], random_angles[:,2], shifts)
+def main(x, theta):
+    random_angles = np.pi*(2*(np.random.rand(batch_size,3)-0.5))
+    shifts = (np.random.rand(batch_size,3,1)-0.5)
+    theta_random = transmat(random_angles[:,0], random_angles[:,1], random_angles[:,2], shifts)
+    transformed = stl.transform(x, theta)
+    return transformed
 
-            transformed = stl.transform(x, theta)
-
-        sess.run(tf.global_variables_initializer())
-        x_random = sess.run(transformed, feed_dict={x: batch, theta: theta_random})
+x_random = main(batch, theta)
 
 
 class Model:
@@ -157,5 +149,3 @@ for i in range(batch_size):
 
     with open('model_' + str(i) + 'random.binvox', 'wb') as f:
         write_binvox(model, f)
-
-

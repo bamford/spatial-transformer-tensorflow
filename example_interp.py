@@ -14,9 +14,6 @@ batch_size = 1
 batch = np.expand_dims(im, axis=0)
 batch = np.tile(batch, [batch_size, 1, 1, 1])
 
-# input placeholder
-x = tf.placeholder(tf.float32, [batch_size, im.shape[0], im.shape[1], im.shape[2]])
-
 # Let the output size of the affine transformer be quarter of the image size.
 outsize = (int(im.shape[0]/4), int(im.shape[1]/4))
 stl_bilinear = AffineTransformer(outsize, interp_method='bilinear')
@@ -26,24 +23,19 @@ stl_bicubic = AffineTransformer(outsize, interp_method='bicubic')
 initial = np.array([[1.0, 0, 0.0], [0, 1.0, 0.0]]).astype('float32')
 initial = initial.flatten()
 
-# %% Run session
-with tf.Session() as sess:
-  with tf.device("/cpu:0"):
-    with tf.variable_scope('spatial_transformer'):
-        theta = initial + tf.zeros([batch_size, stl_bilinear.param_dim])
+# Run session
+def main(x):
+    theta = initial + tf.zeros([batch_size, stl_bilinear.param_dim])
 
-        result_bilinear = stl_bilinear.transform(x, theta)
-        result_bicubic = stl_bicubic.transform(x, theta)
-        result_bilinear_tf = tf.image.resize_bilinear(x, outsize, align_corners=True)
-        result_bicubic_tf = tf.image.resize_bicubic(x, outsize, align_corners=True)
-        #result_bilinear_tf = tf.image.resize_bilinear(x, outsize)
-        #result_bicubic_tf = tf.image.resize_bicubic(x, outsize)
+    result_bilinear = stl_bilinear.transform(x, theta)
+    result_bicubic = stl_bicubic.transform(x, theta)
+    result_bilinear_tf = tf.image.resize_bilinear(x, outsize, align_corners=True)
+    result_bicubic_tf = tf.image.resize_bicubic(x, outsize, align_corners=True)
+    #result_bilinear_tf = tf.image.resize_bilinear(x, outsize)
+    #result_bicubic_tf = tf.image.resize_bicubic(x, outsize)
+    return result_bilinear, result_bicubic, result_bilinear_tf, result_bicubic_tf
 
-    sess.run(tf.global_variables_initializer())
-    result_bilinear_ = sess.run(result_bilinear, feed_dict={x: batch})
-    result_bicubic_ = sess.run(result_bicubic, feed_dict={x: batch})
-    result_bilinear_tf_ = sess.run(result_bilinear_tf, feed_dict={x: batch})
-    result_bicubic_tf_ = sess.run(result_bicubic_tf, feed_dict={x: batch})
+result_bilinear_, result_bicubic_, result_bilinear_tf_, result_bicubic_tf_ = main(batch)
 
 # save our result
 imageio.imsave('interp_bilinear_stn.png', result_bilinear_[0])

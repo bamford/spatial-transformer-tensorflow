@@ -29,9 +29,6 @@ batch_size = 4
 batch = np.expand_dims(im, axis=0)
 batch = np.tile(batch, [batch_size, 1, 1, 1])
 
-# input placeholder
-x = tf.placeholder(tf.float32, [batch_size, im.shape[0], im.shape[1], im.shape[2]])
-
 # Let the output size of the affine transformer be quarter of the image size.
 outsize = (int(im.shape[0]/4), int(im.shape[1]/4))
 
@@ -39,20 +36,17 @@ outsize = (int(im.shape[0]/4), int(im.shape[1]/4))
 stl = AffineTransformer(outsize)
 
 # Identity transformation parameters
-initial = np.array([1.0, 0.0, 0.0, 
+initial = np.array([1.0, 0.0, 0.0,
                     0.0, 1.0, 0.0]).astype('float32')
 initial = np.reshape(initial, [1, stl.param_dim])
 
-# Run session
-with tf.Session() as sess:
-  with tf.device("/cpu:0"):
-    with tf.variable_scope('spatial_transformer') as scope:
-        # Random jitter of the identity parameters
-        theta = initial + 0.1*tf.random_normal([batch_size, stl.param_dim])
-        result = stl.transform(x, theta)
+def main(x):
+    # Random jitter of the identity parameters
+    theta = initial + 0.1*tf.random_normal([batch_size, stl.param_dim])
+    result = stl.transform(x, theta)
+    return result
 
-    sess.run(tf.global_variables_initializer())
-    result_ = sess.run(result, feed_dict={x: batch})
+result_ = main(batch)
 
 # save our result
 for i in range(result_.shape[0]):

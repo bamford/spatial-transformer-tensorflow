@@ -28,26 +28,20 @@ batch_size = 4
 batch = np.expand_dims(im, axis=0)
 batch = np.tile(batch, [batch_size, 1, 1, 1])
 
-# input placeholder
-x = tf.placeholder(tf.float32, [batch_size, im.shape[0], im.shape[1], im.shape[2]])
-
-# Let the output size of the projective transformer be quarter of the image size.
+# Let the output size of the elastic transformer be quarter of the image size.
 outsize = (int(im.shape[0]/4), int(im.shape[1]/4))
 
 # Elastic Transformation Layer
 stl = ElasticTransformer(outsize)
 
 # Run session
-with tf.Session() as sess:
-  with tf.device("/cpu:0"):
-    with tf.variable_scope('spatial_transformer'):
-        # Random jitter of identity parameters
-        theta = 0.1*tf.random_normal([batch_size, stl.param_dim])
-        result = stl.transform(x, theta)
+def main(x):
+    # Random jitter of identity parameters
+    theta = 0.1*tf.random_normal([batch_size, stl.param_dim])
+    result = stl.transform(x, theta)
+    return result
 
-    # %% Run session
-    sess.run(tf.global_variables_initializer())
-    result_ = sess.run(result, feed_dict={x: batch})
+result_ = main(batch)
 
 # save our result
 for i in range(result_.shape[0]):

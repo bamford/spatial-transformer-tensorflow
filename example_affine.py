@@ -13,7 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 from scipy import ndimage
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 from spatial_transformer import AffineTransformer
 import numpy as np
 import scipy.misc

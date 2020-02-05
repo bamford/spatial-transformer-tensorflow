@@ -1,5 +1,5 @@
 from scipy import ndimage 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 from spatial_transformer import AffineVolumeTransformer
 import numpy as np
 import scipy.misc

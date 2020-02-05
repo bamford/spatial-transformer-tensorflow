@@ -10,7 +10,7 @@ A Spatial Transformer Network implemented in Tensorflow 0.9 by Daniyar Turmukham
 
 This tensorflow implementation supports Affine, Projective and Elastic (Thin Plate Spline [7]) Transformations.
 
-The original code has been updated for compatibility with TensorFlow's eager execution model by Steven Bamford (@bamford).
+The original code has been updated for compatibility with TensorFlow's eager execution model, and to include a Restricted Transformation, by Steven Bamford (@bamford).
 
 <div align="center">
   <img src="imgs/pipeline.png"><br>
@@ -19,18 +19,20 @@ The original code has been updated for compatibility with TensorFlow's eager exe
 ## How to use
 
 ```python
-from stn import AffineTransformer, ProjectiveTransformer, ElasticTransformer
+from stn import AffineTransformer, ProjectiveTransformer, ElasticTransformer, RestrictedTransformer
 
 # Initialize
 outsize = [300, 300]
 stl1 = AffineTransformer(outsize)
 stl2 = ProjectiveTransformer(outsize)
 stl3 = ElasticTransformer(outsize)
+stl4 = RestrictedTransformer(outsize)
 
 # Transform 
 y1 = stl1.transform(U, theta1)
 y2 = stl2.transform(U, theta2)
 y3 = stl3.transform(U, theta3)
+y4 = stl4.transform(U, theta4)
 ```
 
 
@@ -67,6 +69,15 @@ example_elastic.py shows how to use ElasticTransformer. Here, deformations are d
   <img src="imgs/elastic3.png">
 </div>
 
+### RestrictedTransformer
+example_affine.py shows how to use RestrictedTransformer. This behaves similarly to AffineTransformer, but takes more directly comprehensible parameters, designed in such a way as to restrict possible transformations. The transformation parameters, `theta`, are (`x_scale`, `y_scale`, `rotation`, `x_translation`, `y_translation`), where the scales are logarithms of the actual scale factor and the rotation is given as tan(angle/2). This prevents reflections and limits rotations to ±180 degrees. The parameterisation also makes it easier to apply further external restrictions on the transformations (e.g. not allowing rotations, only allowing isotropic scaling, etc.). 
+
+<div align="center">
+  <img src="imgs/restricted0.png">
+  <img src="imgs/restricted1.png">
+  <img src="imgs/restricted2.png">
+  <img src="imgs/restricted3.png">
+</div>
 
 ### Bilinear and Bicubic Interpolation
 example_interp.py shows how to use Bilinear and Bicubic interpolation methods.

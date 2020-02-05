@@ -206,7 +206,73 @@ class AffineTransformer(object):
             x_s_flat = tf.reshape(x_s, [-1])
             y_s_flat = tf.reshape(y_s, [-1])
             return x_s_flat, y_s_flat
-    
+
+
+class RestrictedTransformer(AffineTransformer):
+    """Spatial Restricted Transformer Layer
+
+    Version of the AffineTransformer class that is restricted to a range of affine transformations: no reflection, no shear, rotations only up to +-180 degrees
+
+    """
+
+    def __init__(self, out_size, name='SpatialRestrictedTransformer', interp_method='bilinear', **kwargs):
+        """
+        Parameters
+        ----------
+        out_size : tuple of two ints
+            The size of the output of the spatial network (height, width).
+        name : string
+            The scope name of the variables in this network.
+
+        """
+        super().__init__(out_size, name=name, interp_method=interp_method, **kwargs)
+        self.param_dim = 5
+
+    def transform(self, inp, theta):
+        """
+        Restricted Transformation of input tensor inp with parameters theta
+
+        Parameters
+        ----------
+        inp : float
+            The input tensor should have the shape
+            [batch_size, height, width, num_channels].
+        theta: float
+            The output of the localisation network
+            should have the shape
+            [batch_size, 6], where the parameters are:
+            x_scale, y_scale, rotation, x_translation, y_translation,
+            where the scales are logarithms of the actual scale factor and the rotation
+            is given as tan(angle/2).
+        Notes
+        -----
+        Reflections are prevented by the use of logarithmic scale parameters.
+        Rotations are limited to +-180 degrees by the tan(angle/2) parameterization
+        To initialize the network to the identity transform initialize ``theta`` to :
+            identity = np.array([0., 0., 0., 0., 0.])
+            theta = tf.Variable(initial_value=identity)
+
+        """
+        with tf.variable_scope(self.name + '_preparation'):
+            batch_size = tf.shape(inp)[0]
+            x_scale = tf.exp(theta[:, 0])
+            y_scale = tf.exp(theta[:, 1])
+            angle = 2 * tf.atan(theta[:, 2])
+            sin_angle = tf.sin(angle)
+            cos_angle = tf.cos(angle)
+            x_translation = theta[:, 3]
+            y_translation = theta[:, 4]
+            affine = tf.transpose(tf.stack([x_scale * cos_angle,
+                               -y_scale * sin_angle,
+                               x_translation,
+                               x_scale * sin_angle,
+                               y_scale * cos_angle,
+                               y_translation]))
+            output = super().transform(inp, affine)
+
+        return output
+
+
 class ProjectiveTransformer(object):
     """Spatial Projective Transformer Layer
 

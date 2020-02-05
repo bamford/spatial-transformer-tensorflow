@@ -1,12 +1,11 @@
-from scipy import ndimage
+import imageio
 import tensorflow.compat.v1 as tf
 from spatial_transformer import AffineTransformer
 import numpy as np
-import scipy.misc
 
 # Input image retrieved from:
 # https://raw.githubusercontent.com/skaae/transformer_network/master/cat.jpg
-im = ndimage.imread('data/cat.jpg')
+im = imageio.imread('data/cat.jpg')
 im = im / 255.
 im = im.astype('float32')
 
@@ -47,20 +46,19 @@ with tf.Session() as sess:
     result_bicubic_tf_ = sess.run(result_bicubic_tf, feed_dict={x: batch})
 
 # save our result
-scipy.misc.imsave('interp_bilinear_stn.png', result_bilinear_[0])
-scipy.misc.imsave('interp_bicubic_stn.png', result_bicubic_[0])
+imageio.imsave('interp_bilinear_stn.png', result_bilinear_[0])
+imageio.imsave('interp_bicubic_stn.png', result_bicubic_[0])
 
 # save tf.image result
-scipy.misc.imsave('interp_bilinear_tf.png', result_bilinear_tf_[0])
-scipy.misc.imsave('interp_bicubic_tf.png', result_bicubic_tf_[0])
+imageio.imsave('interp_bilinear_tf.png', result_bilinear_tf_[0])
+imageio.imsave('interp_bicubic_tf.png', result_bicubic_tf_[0])
 
 # save differences
 diff_bilinear = np.abs(result_bilinear_[0] - result_bilinear_tf_[0])
 diff_bilinear = diff_bilinear - np.amin(diff_bilinear)
 diff_bilinear = diff_bilinear/(0.0001 + np.amax(diff_bilinear))
-scipy.misc.imsave('interp_diff_bilinear.png', diff_bilinear)
+imageio.imsave('interp_diff_bilinear.png', diff_bilinear)
 diff_bicubic = np.abs(result_bicubic_[0] - result_bicubic_tf_[0])
 diff_bicubic = diff_bicubic - np.amin(diff_bicubic)
 diff_bicubic = diff_bicubic/(0.0001 + np.amax(diff_bicubic))
-scipy.misc.imsave('interp_diff_bicubic.png', diff_bicubic)
-
+imageio.imsave('interp_diff_bicubic.png', diff_bicubic)

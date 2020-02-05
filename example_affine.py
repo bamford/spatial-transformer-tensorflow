@@ -12,15 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-from scipy import ndimage
+
+import imageio
 import tensorflow.compat.v1 as tf
 from spatial_transformer import AffineTransformer
 import numpy as np
-import scipy.misc
 
 # Input image retrieved from:
 # https://raw.githubusercontent.com/skaae/transformer_network/master/cat.jpg
-im = ndimage.imread('data/cat.jpg')
+im = imageio.imread('data/cat.jpg')
 im = im / 255.
 im = im.astype('float32')
 
@@ -56,5 +56,4 @@ with tf.Session() as sess:
 
 # save our result
 for i in range(result_.shape[0]):
-  scipy.misc.imsave('affine' + str(i) + '.png', result_[i])
-
+  imageio.imsave('affine' + str(i) + '.png', result_[i])

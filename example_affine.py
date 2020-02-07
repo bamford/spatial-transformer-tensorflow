@@ -34,6 +34,7 @@ outsize = (int(im.shape[0]/4), int(im.shape[1]/4))
 
 # Affine Transformation Layer
 stl = AffineTransformer(outsize)
+stlm = AffineTransformer(outsize, masked=True)
 
 # Identity transformation parameters
 initial = np.array([1.0, 0.0, 0.0,
@@ -44,10 +45,12 @@ def main(x):
     # Random jitter of the identity parameters
     theta = initial + 0.1*tf.random_normal([batch_size, stl.param_dim])
     result = stl.transform(x, theta)
-    return result
+    resultm = stlm.transform(x, theta)
+    return result, resultm
 
-result_ = main(batch)
+result_, resultm_ = main(batch)
 
 # save our result
 for i in range(result_.shape[0]):
   imageio.imsave('affine' + str(i) + '.png', result_[i])
+  imageio.imsave('affine_masked' + str(i) + '.png', resultm_[i])

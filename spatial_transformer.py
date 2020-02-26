@@ -27,20 +27,16 @@ from tensorflow.keras.layers import Layer
 import math
 from functools import partial
 
-# TODO: fix all other classes to work with TF2 like AffineTransformer
-# TODO: fix all other classes to take masked argument
-
 """
 Legacy Function
 
 """
 def transformer(inp, theta, out_size, name='SpatialTransformer', **kwargs):
-    with tf.variable_scope(name):
-        stl = AffineTransformer(out_size)
-        output = stl.transform(inp, theta, out_size)
-        return output
+    stl = AffineTransformer(name, out_size)
+    output = stl.transform(inp, theta)
+    return output
 
-class AffineVolumeTransformer(object):
+class AffineVolumeTransformer(Layer):
     """Spatial Affine Volume Transformer Layer
     Implements a spatial transformer layer for volumetric 3D input.
     Implemented by Daniyar Turmukhambetov.
@@ -56,28 +52,37 @@ class AffineVolumeTransformer(object):
             The scope name of the variables in this network.
 
         """
-        self.name = name
         self.out_size = out_size
         self.param_dim = 3*4
         self.interp_method=interp_method
+        self.voxel_grid = _meshgrid3d(self.out_size)
+        super().__init__(**kwargs)
 
-        with tf.variable_scope(self.name):
-            self.voxel_grid = _meshgrid3d(self.out_size)
-        
-    
-    def transform(self, inp, theta):
+    def compute_output_shape(self, input_shapes):
+        height, width, depth = self.out_size
+        num_channels = input_shapes[0][-1]
+        return None, height, width, depth, num_channels
+
+    def build(self, input_shape):
+        pass
+
+    def transform(self, x, theta):
+        self.build(x.shape)
+        return self.call([x, theta])
+
+    def call(self, tensors, mask=None):
         """
         Affine Transformation of input tensor inp with parameters theta
 
         Parameters
         ----------
-        inp : float
-            The input tensor should have the shape 
+        tensors: list of two floats
+            inp: The input tensor should have the shape
             [batch_size, depth, height, width, in_channels].
-        theta: float
-            The output of the localisation network
-            should have the shape
-            [batch_size, 12].
+            theta: The output of the localisation network
+            should have the shape [batch_size, 12].
+        mask: currently unused
+
         Notes
         -----
         To initialize the network to the identity transform initialize ``theta`` to :
@@ -88,74 +93,52 @@ class AffineVolumeTransformer(object):
             theta = tf.Variable(initial_value=identity)
 
         """
-        with tf.variable_scope(self.name):
-            x_s, y_s, z_s = self._transform(inp, theta)
-    
-            output = _interpolate3d(
-                inp, x_s, y_s, z_s,
-                self.out_size,
-                method=self.interp_method
-                )
+        inp, theta = tensors
+        x_s, y_s, z_s = self._transform(inp, theta)
 
-            shape = tf.shape(inp)
-            outshape = tf.stack([shape[0],
-                                 self.out_size[0],
-                                 self.out_size[1],
-                                 self.out_size[2],
-                                 shape[4]])
-            output = tf.reshape(output, outshape)
+        output = _interpolate3d(
+            inp, x_s, y_s, z_s,
+            self.out_size,
+            method=self.interp_method
+            )
+
+        shape = tf.shape(inp)
+        outshape = tf.stack([shape[0],
+                             self.out_size[0],
+                             self.out_size[1],
+                             self.out_size[2],
+                             shape[4]])
+        output = tf.reshape(output, outshape)
 
         return output
-
-
     
     def _transform(self, inp, theta):
-        with tf.variable_scope(self.name + '_affine_volume_transform'):
-            batch_size = tf.shape(inp)[0]
+        batch_size = tf.shape(inp)[0]
 
-            theta = tf.reshape(theta, (-1, 3, 4))
-            voxel_grid = tf.tile(self.voxel_grid, tf.stack([batch_size]))
-            voxel_grid = tf.reshape(voxel_grid, tf.stack([batch_size, 4, -1]))
+        theta = tf.reshape(theta, (-1, 3, 4))
+        voxel_grid = tf.tile(self.voxel_grid, tf.stack([batch_size]))
+        voxel_grid = tf.reshape(voxel_grid, tf.stack([batch_size, 4, -1]))
 
-            # Transform A x (x_t, y_t, z_t, 1)^T -> (x_s, y_s, z_s)
-            T_g = tf.matmul(theta, voxel_grid)
-            x_s = tf.slice(T_g, [0, 0, 0], [-1, 1, -1])
-            y_s = tf.slice(T_g, [0, 1, 0], [-1, 1, -1])
-            z_s = tf.slice(T_g, [0, 2, 0], [-1, 1, -1])
+        # Transform A x (x_t, y_t, z_t, 1)^T -> (x_s, y_s, z_s)
+        T_g = tf.matmul(theta, voxel_grid)
+        x_s = tf.slice(T_g, [0, 0, 0], [-1, 1, -1])
+        y_s = tf.slice(T_g, [0, 1, 0], [-1, 1, -1])
+        z_s = tf.slice(T_g, [0, 2, 0], [-1, 1, -1])
 
-            x_s_flat = tf.reshape(x_s, [-1])
-            y_s_flat = tf.reshape(y_s, [-1])
-            z_s_flat = tf.reshape(z_s, [-1])
-            return x_s_flat, y_s_flat, z_s_flat
+        x_s_flat = tf.reshape(x_s, [-1])
+        y_s_flat = tf.reshape(y_s, [-1])
+        z_s_flat = tf.reshape(z_s, [-1])
+        return x_s_flat, y_s_flat, z_s_flat
 
 
-class AffineTransformer(Layer):
-    """Spatial Affine Transformer Layer
+class Transformer2D(Layer):
+    """Base class for all 2D Transformers"""
 
-    Implements a spatial transformer layer as described in [1]_.
-    Based on [2]_ and [3]_. Edited by Daniyar Turmukhambetov.
-
-    """
-
-    def __init__(self, out_size, interp_method='bilinear',
-                 masked=False, cval=0, **kwargs):
-        """
-        Parameters
-        ----------
-        out_size : tuple of two ints
-            The size of the output of the spatial network (height, width).
-        name : string
-            The scope name of the variables in this network.
-
-        """
+    def __init__(self, out_size, interp_method='bilinear', masked=False, cval=0, **kwargs):
         self.out_size = out_size
-        self.param_dim = 6
         self.interp_method = interp_method
         self.masked = masked
         self.cval = cval
-
-        self.pixel_grid = _meshgrid(self.out_size)
-
         super().__init__(**kwargs)
 
     def compute_output_shape(self, input_shapes):
@@ -169,11 +152,46 @@ class AffineTransformer(Layer):
                                        masked=self.masked,
                                        cval=self.cval)
         elif self.interp_method == 'bicubic':
-            self.interpolate = bicubic_interp
+            self.interpolate = partial(bicubic_interp,
+                                       masked=self.masked,
+                                       cval=self.cval)
 
     def transform(self, x, theta):
         self.build(x.shape)
         return self.call([x, theta])
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({'out_size': self.out_size,
+                       'interp_method': self.interp_method})
+        return config
+
+
+class AffineTransformer(Transformer2D):
+    """Spatial Affine Transformer Layer
+
+    Implements a spatial transformer layer as described in [1]_.
+    Based on [2]_ and [3]_. Edited by Daniyar Turmukhambetov.
+
+    """
+
+    def __init__(self, out_size, name="SpatialAffineTransformer", **kwargs):
+        """
+        Parameters
+        ----------
+        out_size : tuple of two ints
+            The size of the output of the spatial network (height, width)
+        name : string
+            The name of this layer
+        interp_method: 'bilinear' (default) or 'bicubic'
+        masked: bool (default: False)
+            Should the edges of the transformed images be masked
+        cval: int (default: 0)
+            Value to mask edges with if masked=True
+        """
+        super().__init__(out_size, name=name, **kwargs)
+        self.param_dim = 6
+        self.pixel_grid = _meshgrid(out_size)
 
     def call(self, tensors, mask=None):
         """
@@ -181,13 +199,13 @@ class AffineTransformer(Layer):
 
         Parameters
         ----------
-        inp : float
-            The input tensor should have the shape 
+        tensors: list of two floats
+            inp: The input tensor should have the shape
             [batch_size, height, width, num_channels].
-        theta: float
-            The output of the localisation network
-            should have the shape
-            [batch_size, 6].
+            theta: The output of the localisation network
+            should have the shape [batch_size, 6].
+        mask: currently unused
+
         Notes
         -----
         To initialize the network to the identity transform initialize ``theta`` to :
@@ -227,11 +245,6 @@ class AffineTransformer(Layer):
         y_s_flat = tf.reshape(y_s, [-1])
         return x_s_flat, y_s_flat
 
-    def get_config(self):
-        config = super().get_config()
-        config.update({'out_size': self.out_size,
-                       'interp_method': self.interp_method})
-        return config
 
 class RestrictedTransformer(AffineTransformer):
     """Spatial Restricted Transformer Layer
@@ -240,35 +253,39 @@ class RestrictedTransformer(AffineTransformer):
 
     """
 
-    def __init__(self, out_size, name='SpatialRestrictedTransformer', interp_method='bilinear', **kwargs):
+    def __init__(self, out_size, name='SpatialRestrictedTransformer', **kwargs):
         """
         Parameters
         ----------
         out_size : tuple of two ints
-            The size of the output of the spatial network (height, width).
+            The size of the output of the spatial network (height, width)
         name : string
-            The scope name of the variables in this network.
-
+            The name of this layer
+        interp_method: 'bilinear' (default) or 'bicubic'
+        masked: bool (default: False)
+            Should the edges of the transformed images be masked
+        cval: int (default: 0)
+            Value to mask edges with if masked=True
         """
-        super().__init__(out_size, name=name, interp_method=interp_method, **kwargs)
+        super().__init__(out_size, name=name, **kwargs)
         self.param_dim = 5
 
-    def transform(self, inp, theta):
+    def call(self, tensors, mask=None):
         """
         Restricted Transformation of input tensor inp with parameters theta
 
         Parameters
         ----------
-        inp : float
-            The input tensor should have the shape
+        tensors: list of two floats
+            inp: The input tensor should have the shape
             [batch_size, height, width, num_channels].
-        theta: float
-            The output of the localisation network
-            should have the shape
-            [batch_size, 6], where the parameters are:
+            theta: The output of the localisation network
+            should have the shape [batch_size, 5], where the parameters are:
             x_scale, y_scale, rotation, x_translation, y_translation,
             where the scales are logarithms of the actual scale factor and the rotation
             is given as tan(angle/2).
+        mask: currently unused
+
         Notes
         -----
         Reflections are prevented by the use of logarithmic scale parameters.
@@ -278,27 +295,26 @@ class RestrictedTransformer(AffineTransformer):
             theta = tf.Variable(initial_value=identity)
 
         """
-        with tf.variable_scope(self.name + '_preparation'):
-            batch_size = tf.shape(inp)[0]
-            x_scale = tf.exp(theta[:, 0])
-            y_scale = tf.exp(theta[:, 1])
-            angle = 2 * tf.atan(theta[:, 2])
-            sin_angle = tf.sin(angle)
-            cos_angle = tf.cos(angle)
-            x_translation = theta[:, 3]
-            y_translation = theta[:, 4]
-            affine = tf.transpose(tf.stack([x_scale * cos_angle,
-                               -y_scale * sin_angle,
-                               x_translation,
-                               x_scale * sin_angle,
-                               y_scale * cos_angle,
-                               y_translation]))
-            output = super().transform(inp, affine)
-
+        inp, theta = tensors
+        batch_size = tf.shape(inp)[0]
+        x_scale = tf.exp(theta[:, 0])
+        y_scale = tf.exp(theta[:, 1])
+        angle = 2 * tf.atan(theta[:, 2])
+        sin_angle = tf.sin(angle)
+        cos_angle = tf.cos(angle)
+        x_translation = theta[:, 3]
+        y_translation = theta[:, 4]
+        affine = tf.transpose(tf.stack([x_scale * cos_angle,
+                           -y_scale * sin_angle,
+                           x_translation,
+                           x_scale * sin_angle,
+                           y_scale * cos_angle,
+                           y_translation]))
+        output = super().call([inp, affine])
         return output
 
 
-class ProjectiveTransformer(object):
+class ProjectiveTransformer(Transformer2D):
     """Spatial Projective Transformer Layer
 
     Implements a spatial transformer layer as described in [1]_.
@@ -306,38 +322,36 @@ class ProjectiveTransformer(object):
 
     """
 
-    def __init__(self, out_size, name='SpatialProjectiveTransformer', interp_method='bilinear', **kwargs):
+    def __init__(self, out_size, name='SpatialProjectiveTransformer', **kwargs):
         """
         Parameters
         ----------
         out_size : tuple of two ints
-            The size of the output of the spatial network (height, width).
+            The size of the output of the spatial network (height, width)
         name : string
-            The scope name of the variables in this network.
-
+            The name of this layer
+        interp_method: 'bilinear' (default) or 'bicubic'
+        masked: bool (default: False)
+            Should the edges of the transformed images be masked
+        cval: int (default: 0)
+            Value to mask edges with if masked=True
         """
-        self.name = name
-        self.out_size = out_size
+        super().__init__(out_size, name=name, **kwargs)
         self.param_dim = 8
-        self.interp_method=interp_method
+        self.pixel_grid = _meshgrid(out_size)
 
-        with tf.variable_scope(self.name):
-            self.pixel_grid = _meshgrid(self.out_size)
-        
-    
-    def transform(self, inp, theta):
+    def call(self, tensors, mask=None):
         """
         Projective Transformation of input tensor inp with parameters theta
 
         Parameters
         ----------
-        inp : float
-            The input tensor should have the shape 
+        tensors: list of two floats
+            inp: The input tensor should have the shape
             [batch_size, height, width, num_channels].
-        theta: float
-            The output of the localisation network
-            should have the shape
-            [batch_size, 8].
+            theta: The output of the localisation network
+            should have the shape [batch_size, 8]
+
         Notes
         -----
         To initialize the network to the identity transform initialize ``theta`` to :
@@ -347,51 +361,49 @@ class ProjectiveTransformer(object):
             theta = tf.Variable(initial_value=identity)
 
         """
-        with tf.variable_scope(self.name):
-            x_s, y_s = self._transform(inp, theta)
-    
-            output = _interpolate(
-                inp, x_s, y_s,
-                self.out_size,
-                method=self.interp_method
-                )
+        inp, theta = tensors
 
-            shape = tf.shape(inp)
-            outshape = tf.stack([shape[0],
-                                 self.out_size[0],
-                                 self.out_size[1],
-                                 shape[3]])
-            output = tf.reshape(output, outshape)
+        x_s, y_s = self._transform(inp, theta)
+
+        output = self.interpolate(
+            inp, x_s, y_s,
+            self.out_size)
+
+        shape = tf.shape(inp)
+        outshape = tf.stack([shape[0],
+                             self.out_size[0],
+                             self.out_size[1],
+                             shape[3]])
+        output = tf.reshape(output, outshape)
 
         return output
 
 
-    
     def _transform(self, inp, theta):
-        with tf.variable_scope(self.name + '_projective_transform'):
-            batch_size = tf.shape(inp)[0]
+        batch_size = tf.shape(inp)[0]
 
-            theta = tf.reshape(theta, (batch_size, 8))
-            theta = tf.concat([theta, tf.ones(tf.stack([batch_size, 1]))], 1)
-            theta = tf.reshape(theta, tf.stack([batch_size, 3, 3]))
+        theta = tf.reshape(theta, (batch_size, 8))
+        theta = tf.concat([theta, tf.ones(tf.stack([batch_size, 1]))], 1)
+        theta = tf.reshape(theta, tf.stack([batch_size, 3, 3]))
 
-            pixel_grid = tf.tile(self.pixel_grid, tf.stack([batch_size]))
-            pixel_grid = tf.reshape(pixel_grid, tf.stack([batch_size, 3, -1]))
+        pixel_grid = tf.tile(self.pixel_grid, tf.stack([batch_size]))
+        pixel_grid = tf.reshape(pixel_grid, tf.stack([batch_size, 3, -1]))
 
-            # Transform A x (x_t, y_t, 1)^T -> (x_s, y_s)
-            T_g = tf.matmul(theta, pixel_grid)
-            x_s = tf.slice(T_g, [0, 0, 0], [-1, 1, -1])
-            y_s = tf.slice(T_g, [0, 1, 0], [-1, 1, -1])
-            z_s = tf.slice(T_g, [0, 2, 0], [-1, 1, -1])
+        # Transform A x (x_t, y_t, 1)^T -> (x_s, y_s)
+        T_g = tf.matmul(theta, pixel_grid)
+        x_s = tf.slice(T_g, [0, 0, 0], [-1, 1, -1])
+        y_s = tf.slice(T_g, [0, 1, 0], [-1, 1, -1])
+        z_s = tf.slice(T_g, [0, 2, 0], [-1, 1, -1])
 
-            x_s = x_s/z_s
-            y_s = y_s/z_s
+        x_s = x_s/z_s
+        y_s = y_s/z_s
 
-            x_s_flat = tf.reshape(x_s, [-1])
-            y_s_flat = tf.reshape(y_s, [-1])
-            return x_s_flat, y_s_flat
+        x_s_flat = tf.reshape(x_s, [-1])
+        y_s_flat = tf.reshape(y_s, [-1])
+        return x_s_flat, y_s_flat
 
-class ElasticTransformer(object):
+
+class ElasticTransformer(Transformer2D):
     """Spatial Elastic Transformer Layer with Thin Plate Spline deformations
 
     Implements a spatial transformer layer as described in [1]_.
@@ -399,54 +411,51 @@ class ElasticTransformer(object):
 
     """
 
-    def __init__(self, out_size, param_dim=2*16, name='SpatialElasticTransformer', interp_method='bilinear', **kwargs):
+    def __init__(self, out_size, param_dim=2*16, name='SpatialElasticTransformer', **kwargs):
         """
         Parameters
         ----------
         out_size : tuple of two ints
-            The size of the output of the spatial network (height, width).
-        param_dim: int
-            The 2 x number of control points that define 
-            Thin Plate Splines deformation field. 
-            number of control points *MUST* be a square of an integer. 
-            2 x 16 by default.
+            The size of the output of the spatial network (height, width)
+        param_dim : the number of parameters (twice the number of control points)
         name : string
-            The scope name of the variables in this network.
-            
+            The name of this layer
+        interp_method: 'bilinear' (default) or 'bicubic'
+        masked: bool (default: False)
+            Should the edges of the transformed images be masked
+        cval: int (default: 0)
+            Value to mask edges with if masked=True
         """
+        super().__init__(out_size, name=name, **kwargs)
         num_control_points = int(param_dim/2)
         assert param_dim == 2*num_control_points, 'param_dim must be 2 times a square of an integer.'
 
-        self.name = name
         self.param_dim = param_dim
-        self.interp_method=interp_method
         self.num_control_points = num_control_points
         self.out_size = out_size
 
         self.grid_size = math.floor(math.sqrt(self.num_control_points))
         assert self.grid_size*self.grid_size == self.num_control_points, 'num_control_points must be a square of an int'
 
-        with tf.variable_scope(self.name):
-            # Create source grid
-            self.source_points = ElasticTransformer.get_meshgrid(self.grid_size, self.grid_size)
-            # Construct pixel grid
-            self.pixel_grid = ElasticTransformer.get_meshgrid(self.out_size[1], self.out_size[0])
-            self.num_pixels = self.out_size[0]*self.out_size[1]
-            self.pixel_distances, self.L_inv =  self._initialize_tps(self.source_points, self.pixel_grid)
+        # Create source grid
+        self.source_points = ElasticTransformer.get_meshgrid(self.grid_size, self.grid_size)
+        # Construct pixel grid
+        self.pixel_grid = ElasticTransformer.get_meshgrid(self.out_size[1], self.out_size[0])
+        self.num_pixels = self.out_size[0]*self.out_size[1]
+        self.pixel_distances, self.L_inv =  self._initialize_tps(self.source_points, self.pixel_grid)
 
-
-    def transform(self, inp, theta, forward=True, **kwargs):
+    def call(self, tensors, mask=None, forward=True):
         """
         Parameters
         ----------
-        inp : float
-            The input tensor should have the shape 
+        tensors: list of two floats
+            inp: The input tensor should have the shape
             [batch_size, height, width, num_channels].
-        theta: float 
-            Should have the shape of [batch_size, self.num_control_points x 2]
-            Theta is the output of the localisation network, so it is 
-            the x and y offsets of the destination coordinates 
-            of each of the control points.
+            theta: The output of the localisation network
+            should have the shape [batch_size, self.num_control_points x 2].
+            Theta is the output of the localisation
+            network, so it is the x and y offsets of the destination
+            coordinates of each of the control points.
         Notes
         -----
         To initialize the network to the identity transform initialize ``theta`` to zeros:
@@ -455,35 +464,33 @@ class ElasticTransformer(object):
             theta = tf.Variable(initial_value=identity)
 
         """
-        with tf.variable_scope(self.name):
-            # reshape destination offsets to be (batch_size, 2, num_control_points)
-            # and add to source_points
-            source_points = tf.expand_dims(self.source_points, 0)
-            theta = source_points + tf.cast(tf.reshape(theta, [-1, 2, self.num_control_points]), tf.float32)
+        inp, theta = tensors
+        # reshape destination offsets to be (batch_size, 2, num_control_points)
+        # and add to source_points
+        source_points = tf.expand_dims(self.source_points, 0)
+        theta = source_points + tf.cast(tf.reshape(theta, [-1, 2, self.num_control_points]), tf.float32)
 
-            x_s, y_s = self._transform(
-                    inp, theta, self.num_control_points, 
-                    self.pixel_grid, self.num_pixels, 
-                    self.pixel_distances, self.L_inv, 
+        x_s, y_s = self._transform(
+                inp, theta, self.num_control_points,
+                self.pixel_grid, self.num_pixels,
+                self.pixel_distances, self.L_inv,
+                self.name + '_elastic_transform', forward)
+        if forward:
+            output = self.interpolate(
+                inp, x_s, y_s,
+                self.out_size
+                )
+        else:
+            rx_s, ry_s = self._transform(
+                    inp, theta, self.num_control_points,
+                    self.pixel_grid, self.num_pixels,
+                    self.pixel_distances, self.L_inv,
                     self.name + '_elastic_transform', forward)
-            if forward:
-                output = _interpolate(
-                    inp, x_s, y_s,
-                    self.out_size,
-                    method=self.interp_method
-                    )
-            else:
-                rx_s, ry_s = self._transform(
-                        inp, theta, self.num_control_points, 
-                        self.pixel_grid, self.num_pixels, 
-                        self.pixel_distances, self.L_inv, 
-                        self.name + '_elastic_transform', forward)
-                output = _interpolate(
-                    inp, rx_s, ry_s,
-                    self.out_size,
-                    method=self.interp_method
-                    )
-                pass
+            output = self.interpolate(
+                inp, rx_s, ry_s,
+                self.out_size
+                )
+            pass
 
         shape = tf.shape(inp)
         outshape = tf.stack([shape[0],
@@ -495,24 +502,23 @@ class ElasticTransformer(object):
         return output
 
     def _transform(self, inp, theta, num_control_points, pixel_grid, num_pixels, pixel_distances, L_inv, name, forward=True):
-        with tf.variable_scope(name):
-            batch_size = tf.shape(inp)[0]
+        batch_size = tf.shape(inp)[0]
 
-            # Solve as in ref [2]
-            theta = tf.reshape(theta, [-1, num_control_points])
-            coefficients = tf.matmul(theta, L_inv)
-            coefficients = tf.reshape(coefficients, [-1, 2, num_control_points+3])
+        # Solve as in ref [2]
+        theta = tf.reshape(theta, [-1, num_control_points])
+        coefficients = tf.matmul(theta, L_inv)
+        coefficients = tf.reshape(coefficients, [-1, 2, num_control_points+3])
 
-            # Transform each point on the target grid (out_size)
-            right_mat = tf.concat([pixel_grid, pixel_distances], 0)
-            right_mat = tf.tile(tf.expand_dims(right_mat, 0), (batch_size, 1, 1))
-            transformed_points = tf.matmul(coefficients, right_mat)
-            transformed_points = tf.reshape(transformed_points, [-1, 2, num_pixels])
-    
-            x_s_flat = tf.reshape(transformed_points[:,0,:], [-1])
-            y_s_flat = tf.reshape(transformed_points[:,1,:], [-1])
+        # Transform each point on the target grid (out_size)
+        right_mat = tf.concat([pixel_grid, pixel_distances], 0)
+        right_mat = tf.tile(tf.expand_dims(right_mat, 0), (batch_size, 1, 1))
+        transformed_points = tf.matmul(coefficients, right_mat)
+        transformed_points = tf.reshape(transformed_points, [-1, 2, num_pixels])
 
-            return x_s_flat, y_s_flat
+        x_s_flat = tf.reshape(transformed_points[:,0,:], [-1])
+        y_s_flat = tf.reshape(transformed_points[:,1,:], [-1])
+
+        return x_s_flat, y_s_flat
 
     # U function for the new point and each source point 
     @staticmethod
@@ -528,7 +534,6 @@ class ElasticTransformer(object):
         #phi = tf.sqrt(r_sq)
         return phi
 
-    
     @staticmethod
     def get_meshgrid(grid_size_x, grid_size_y):
         # Create 2 x num_points array of source points
@@ -539,7 +544,6 @@ class ElasticTransformer(object):
         y_flat = tf.reshape(y_points, (1,-1))
         points = tf.concat([x_flat, y_flat], 0)
         return points
-
 
     def _initialize_tps(self, source_points, pixel_grid):
         """
@@ -582,7 +586,6 @@ class ElasticTransformer(object):
         return pixel_distances, L_inv
 
 
-
 """
 Common Functions
 
@@ -593,35 +596,33 @@ def _meshgrid3d(out_size):
     the regular grid of coordinates to sample the values after the transformation
     
     """
-    with tf.variable_scope('meshgrid3d'):
+    # This should be equivalent to:
+    #  x_t, y_t = np.meshgrid(np.linspace(-1, 1, width),
+    #                         np.linspace(-1, 1, height))
+    #  ones = np.ones(np.prod(x_t.shape))
+    #  grid = np.vstack([x_t.flatten(), y_t.flatten(), ones])
 
-        # This should be equivalent to:
-        #  x_t, y_t = np.meshgrid(np.linspace(-1, 1, width),
-        #                         np.linspace(-1, 1, height))
-        #  ones = np.ones(np.prod(x_t.shape))
-        #  grid = np.vstack([x_t.flatten(), y_t.flatten(), ones])
+    #z_t, y_t, x_t = tf.meshgrid(tf.linspace(0., out_size[0]-1.,  out_size[0]),
+    #                       tf.linspace(0., out_size[1]-1.,  out_size[1]),
+    #                       tf.linspace(0., out_size[2]-1.,  out_size[2]), indexing='ij')
 
-        #z_t, y_t, x_t = tf.meshgrid(tf.linspace(0., out_size[0]-1.,  out_size[0]),
-        #                       tf.linspace(0., out_size[1]-1.,  out_size[1]), 
-        #                       tf.linspace(0., out_size[2]-1.,  out_size[2]), indexing='ij')
+    z_t, y_t, x_t = tf.meshgrid(tf.linspace(-1., 1.,  out_size[0]),
+                           tf.linspace(-1., 1.,  out_size[1]),
+                           tf.linspace(-1., 1.,  out_size[2]), indexing='ij')
 
-        z_t, y_t, x_t = tf.meshgrid(tf.linspace(-1., 1.,  out_size[0]),
-                               tf.linspace(-1., 1.,  out_size[1]), 
-                               tf.linspace(-1., 1.,  out_size[2]), indexing='ij')
+    x_t_flat = tf.reshape(x_t, (1, -1))
+    y_t_flat = tf.reshape(y_t, (1, -1))
+    z_t_flat = tf.reshape(z_t, (1, -1))
 
-        x_t_flat = tf.reshape(x_t, (1, -1))
-        y_t_flat = tf.reshape(y_t, (1, -1))
-        z_t_flat = tf.reshape(z_t, (1, -1))
-
-        ones = tf.ones_like(x_t_flat)
-        grid = tf.concat([x_t_flat, y_t_flat, z_t_flat, ones], 0)
-        grid = tf.reshape(grid, [-1])
-        return grid
+    ones = tf.ones_like(x_t_flat)
+    grid = tf.concat([x_t_flat, y_t_flat, z_t_flat, ones], 0)
+    grid = tf.reshape(grid, [-1])
+    return grid
 
 def _meshgrid(out_size):
     """
     the regular grid of coordinates to sample the values after the transformation
-
+    
     """
 
     # This should be equivalent to:
@@ -645,13 +646,6 @@ def _meshgrid(out_size):
 def _repeat(x, n_repeats):
     rep = tf.tile(tf.expand_dims(x,1), [1, n_repeats])
     return tf.reshape(rep, [-1])
-
-def _interpolate(im, x, y, out_size, method):
-    if method=='bilinear':
-        return bilinear_interp(im, x, y, out_size)
-    if method=='bicubic':
-        return bicubic_interp(im, x, y, out_size)
-    return None
 
 def _interpolate3d(vol, x, y, z, out_size, method='bilinear'):
     return bilinear_interp3d(vol, x, y, z, out_size)
@@ -750,13 +744,13 @@ def bilinear_interp3d(vol, x, y, z, out_size, edge_size=1):
         w111 = tf.expand_dims((z-z0_f)*(y-y0_f)*(x-x0_f),1)
 
         output = tf.add_n([
-            w000*I000,
-            w001*I001,
-            w010*I010,
-            w011*I011,
-            w100*I100,
-            w101*I101,
-            w110*I110,
+            w000*I000, 
+            w001*I001, 
+            w010*I010, 
+            w011*I011, 
+            w100*I100, 
+            w101*I101, 
+            w110*I110, 
             w111*I111])
         return output
 
@@ -832,7 +826,7 @@ def bilinear_interp(im, x, y, out_size, masked=False, cval=0):
     return output
 
 
-def bicubic_interp(im, x, y, out_size):
+def bicubic_interp(im, x, y, out_size, masked=False, cval=0):
     alpha = -0.75 # same as in tf.image.resize_images, see:
     #  tensorflow/tensorflow/core/kernels/resize_bicubic_op.cc
     bicubic_coeffs = (
@@ -842,100 +836,106 @@ def bicubic_interp(im, x, y, out_size):
             (0, 0,      alpha,     -alpha   )
             )
 
-    with tf.variable_scope('bicubic_interp'):
-        batch_size, height, width, channels = tf.shape(im)
+    batch_size, height, width, channels = tf.shape(im)
 
-        x = tf.cast(x, tf.float32)
-        y = tf.cast(y, tf.float32)
-        height_f = tf.cast(height, tf.float32)
-        width_f = tf.cast(width, tf.float32)
-        out_height = out_size[0]
-        out_width = out_size[1]
+    x = tf.cast(x, tf.float32)
+    y = tf.cast(y, tf.float32)
+    height_f = tf.cast(height, tf.float32)
+    width_f = tf.cast(width, tf.float32)
+    out_height = out_size[0]
+    out_width = out_size[1]
 
+    border = ((x < -1) | (x > 1) | (y < -1) | (y > 1))
+    border &= masked
+    border = tf.cast(border, tf.float32)
+    border = tf.tile(tf.expand_dims(border,1), [1, channels])
+    mask = 1 - border
 
-        # scale indices from [-1, 1] to [0, width/height - 1]
-        x = tf.clip_by_value(x, -1, 1)
-        y = tf.clip_by_value(y, -1, 1)
-        x = (x + 1.0) / 2.0 * (width_f-1.0)
-        y = (y + 1.0) / 2.0 * (height_f-1.0)
+    # scale indices from [-1, 1] to [0, width/height - 1]
+    x = tf.clip_by_value(x, -1, 1)
+    y = tf.clip_by_value(y, -1, 1)
+    x = (x + 1.0) / 2.0 * (width_f-1.0)
+    y = (y + 1.0) / 2.0 * (height_f-1.0)
 
-        # do sampling
-        # integer coordinates of 4x4 neighbourhood around (x0_f, y0_f)
-        x0_f = tf.floor(x)
-        y0_f = tf.floor(y)
-        xm1_f = x0_f - 1
-        ym1_f = y0_f - 1
-        xp1_f = x0_f + 1
-        yp1_f = y0_f + 1
-        xp2_f = x0_f + 2
-        yp2_f = y0_f + 2
+    # do sampling
+    # integer coordinates of 4x4 neighbourhood around (x0_f, y0_f)
+    x0_f = tf.floor(x)
+    y0_f = tf.floor(y)
+    xm1_f = x0_f - 1
+    ym1_f = y0_f - 1
+    xp1_f = x0_f + 1
+    yp1_f = y0_f + 1
+    xp2_f = x0_f + 2
+    yp2_f = y0_f + 2
 
-        # clipped integer coordinates
-        xs = [0, 0, 0, 0]
-        ys = [0, 0, 0, 0]
-        xs[0] = tf.cast(x0_f, tf.int32)
-        ys[0] = tf.cast(y0_f, tf.int32)
-        xs[1] = tf.cast(tf.maximum(xm1_f, 0), tf.int32)
-        ys[1] = tf.cast(tf.maximum(ym1_f, 0), tf.int32)
-        xs[2] = tf.cast(tf.minimum(xp1_f, width_f - 1),  tf.int32)
-        ys[2] = tf.cast(tf.minimum(yp1_f, height_f - 1), tf.int32)
-        xs[3] = tf.cast(tf.minimum(xp2_f, width_f - 1),  tf.int32)
-        ys[3] = tf.cast(tf.minimum(yp2_f, height_f - 1), tf.int32)
+    # clipped integer coordinates
+    xs = [0, 0, 0, 0]
+    ys = [0, 0, 0, 0]
+    xs[0] = tf.cast(x0_f, tf.int32)
+    ys[0] = tf.cast(y0_f, tf.int32)
+    xs[1] = tf.cast(tf.maximum(xm1_f, 0), tf.int32)
+    ys[1] = tf.cast(tf.maximum(ym1_f, 0), tf.int32)
+    xs[2] = tf.cast(tf.minimum(xp1_f, width_f - 1),  tf.int32)
+    ys[2] = tf.cast(tf.minimum(yp1_f, height_f - 1), tf.int32)
+    xs[3] = tf.cast(tf.minimum(xp2_f, width_f - 1),  tf.int32)
+    ys[3] = tf.cast(tf.minimum(yp2_f, height_f - 1), tf.int32)
 
-        # indices of neighbours for the batch
-        dim2 = width
-        dim1 = width*height
-        base = _repeat(tf.range(batch_size)*dim1, out_height*out_width)
+    # indices of neighbours for the batch
+    dim2 = width
+    dim1 = width*height
+    base = _repeat(tf.range(batch_size)*dim1, out_height*out_width)
 
-        idx = []
+    idx = []
+    for i in range(4):
+        idx.append([])
+        for j in range(4):
+            cur_idx = base + ys[i]*dim2 + xs[j]
+            idx[i].append(cur_idx)
+
+    # use indices to lookup pixels in the flat image and restore
+    # channels dim
+    im_flat = tf.reshape(im, [-1, channels])
+
+    Is = []
+    for i in range(4):
+        Is.append([])
+        for j in range(4):
+            Is[i].append(tf.gather(im_flat, idx[i][j]))
+
+    def get_weights(x, x0_f):
+        tx = (x-x0_f)
+        tx2 = tx * tx
+        tx3 = tx2 * tx
+        t = [1, tx, tx2, tx3]
+        weights = []
         for i in range(4):
-            idx.append([])
+            result = 0
             for j in range(4):
-                cur_idx = base + ys[i]*dim2 + xs[j]
-                idx[i].append(cur_idx)
-
-        # use indices to lookup pixels in the flat image and restore
-        # channels dim
-        im_flat = tf.reshape(im, [-1, channels])
-
-        Is = []
-        for i in range(4):
-            Is.append([])
-            for j in range(4):
-                Is[i].append(tf.gather(im_flat, idx[i][j]))
-
-        def get_weights(x, x0_f):
-            tx = (x-x0_f)
-            tx2 = tx * tx
-            tx3 = tx2 * tx
-            t = [1, tx, tx2, tx3]
-            weights = []
-            for i in range(4):
-                result = 0
-                for j in range(4):
-                    result = result + bicubic_coeffs[i][j]*t[j]
-                result = tf.reshape(result, [-1, 1])
-                weights.append(result)
-            return weights
+                result = result + bicubic_coeffs[i][j]*t[j]
+            result = tf.reshape(result, [-1, 1])
+            weights.append(result)
+        return weights
 
 
-        # to calculate interpolated values first, 
-        # interpolate in x dim 4 times for y=[0, -1, 1, 2]
-        weights = get_weights(x, x0_f)
-        x_interp = []
-        for i in range(4):
-            result = []
-            for j in range(4):
-                result = result + [weights[j]*Is[i][j]]
-            x_interp.append(tf.add_n(result))
+    # to calculate interpolated values first,
+    # interpolate in x dim 4 times for y=[0, -1, 1, 2]
+    weights = get_weights(x, x0_f)
+    x_interp = []
+    for i in range(4):
+        result = []
+        for j in range(4):
+            result = result + [weights[j]*Is[i][j]]
+        x_interp.append(tf.add_n(result))
 
-        # finally, interpolate in y dim using interpolations in x dim
-        weights = get_weights(y, y0_f)
-        y_interp = []
-        for i in range(4):
-            y_interp = y_interp + [weights[i]*x_interp[i]]
+    # finally, interpolate in y dim using interpolations in x dim
+    weights = get_weights(y, y0_f)
+    y_interp = []
+    for i in range(4):
+        y_interp = y_interp + [weights[i]*x_interp[i]]
 
-        output = tf.add_n(y_interp)
-        return output
+    output = tf.add_n(y_interp)
+    output *= mask
+    output += border * cval
+    return output
 
 

@@ -120,14 +120,14 @@ def transmat(phi, theta, psi, shiftmat=None):
 
 
 # Run session
-def main(x, theta):
+def main(x):
     random_angles = np.pi*(2*(np.random.rand(batch_size,3)-0.5))
     shifts = (np.random.rand(batch_size,3,1)-0.5)
     theta_random = transmat(random_angles[:,0], random_angles[:,1], random_angles[:,2], shifts)
-    transformed = stl.transform(x, theta)
+    transformed = stl.transform(x, theta_random)
     return transformed
 
-x_random = main(batch, theta)
+x_random = main(batch)
 
 
 class Model:

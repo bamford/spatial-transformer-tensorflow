@@ -33,16 +33,23 @@ outsize = (int(im.shape[0]/4), int(im.shape[1]/4))
 
 # Elastic Transformation Layer
 stl = ElasticTransformer(outsize)
+stlc = ElasticTransformer(outsize, interp_method='bicubic')
+stlcm = ElasticTransformer(outsize, interp_method='bicubic',
+                           masked=True, cval=0.5)
 
 # Run session
 def main(x):
     # Random jitter of identity parameters
     theta = 0.1*tf.random_normal([batch_size, stl.param_dim])
     result = stl.transform(x, theta)
-    return result
+    resultc = stlc.transform(x, theta)
+    resultcm = stlcm.transform(x, theta)
+    return result, resultc, resultcm
 
-result_ = main(batch)
+result_, resultc_, resultcm_ = main(batch)
 
 # save our result
 for i in range(result_.shape[0]):
   imageio.imsave('elastic' + str(i) + '.png', result_[i])
+  imageio.imsave('elastic' + str(i) + '_bicubic.png', resultc_[i])
+  imageio.imsave('elastic' + str(i) + '_bicubic_masked_grey.png', resultcm_[i])

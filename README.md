@@ -10,7 +10,12 @@ A Spatial Transformer Network implemented in Tensorflow 0.9 by Daniyar Turmukham
 
 This tensorflow implementation supports Affine, Projective and Elastic (Thin Plate Spline [7]) Transformations.
 
-The original code has been updated for compatibility with TensorFlow's eager execution model, and to include a Restricted Transformation, by Steven Bamford (@bamford).
+The original code has been updated in a number of ways by Steven Bamford (@bamford):
+
+* now compatibile with TensorFlow's eager execution model
+* transformation classes now inherit from Keras Layer
+* include a Restricted Transformation (see below for explanation)
+* optional edge masking with constant value, rather than nearest neighbour.
 
 <div align="center">
   <img src="imgs/pipeline.png"><br>

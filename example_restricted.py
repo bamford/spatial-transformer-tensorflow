@@ -20,9 +20,9 @@ import imageio
 
 # Input image retrieved from:
 # https://raw.githubusercontent.com/skaae/transformer_network/master/cat.jpg
-im = imageio.imread('data/cat.jpg')
-im = im / 255.
-im = im.astype('float32')
+im = imageio.imread("data/cat.jpg")
+im = im / 255.0
+im = im.astype("float32")
 
 # input batch
 batch_size = 4
@@ -30,25 +30,25 @@ batch = np.expand_dims(im, axis=0)
 batch = np.tile(batch, [batch_size, 1, 1, 1])
 
 # Let the output size of the affine transformer be quarter of the image size.
-outsize = (int(im.shape[0]/4), int(im.shape[1]/4))
+outsize = (int(im.shape[0] / 4), int(im.shape[1] / 4))
 
 # Restricted Transformation Layer
 stl = RestrictedTransformer(outsize)
 
 # Identity transformation parameters
-initial = np.array([0.0, 0.0, 0.0,
-                    0.0, 0.0]).astype('float32')
+initial = np.array([0.0, 0.0, 0.0, 0.0, 0.0]).astype("float32")
 initial = np.reshape(initial, [1, stl.param_dim])
 
 # Run session
 def main(x):
     # Random jitter of the identity parameters
-    theta = initial + 0.1*tf.random_normal([batch_size, stl.param_dim])
+    theta = initial + 0.1 * tf.random_normal([batch_size, stl.param_dim])
     result = stl.transform(x, theta)
     return result
+
 
 result_ = main(batch)
 
 # save our result
 for i in range(result_.shape[0]):
-  imageio.imsave('restricted' + str(i) + '.png', result_[i])
+    imageio.imsave("restricted" + str(i) + ".png", result_[i])

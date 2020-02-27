@@ -42,8 +42,11 @@ class AffineVolumeTransformer(Layer):
     Implemented by Daniyar Turmukhambetov.
     """
 
-    def __init__(self, out_size, name='SpatialAffineVolumeTransformer', interp_method='bilinear', **kwargs):
-        """
+    def __init__(
+        self, out_size, name='SpatialAffineVolumeTransformer', interp_method='bilinear',
+        masked=False, cval=0, **kwargs
+    ):
+        '''
         Parameters
         ----------
         out_size : tuple of three ints
@@ -55,6 +58,8 @@ class AffineVolumeTransformer(Layer):
         self.out_size = out_size
         self.param_dim = 3*4
         self.interp_method=interp_method
+        self.masked = masked
+        self.cval = cval
         self.voxel_grid = _meshgrid3d(self.out_size)
         super().__init__(**kwargs)
 
@@ -647,112 +652,135 @@ def _repeat(x, n_repeats):
     rep = tf.tile(tf.expand_dims(x,1), [1, n_repeats])
     return tf.reshape(rep, [-1])
 
-def _interpolate3d(vol, x, y, z, out_size, method='bilinear'):
-    return bilinear_interp3d(vol, x, y, z, out_size)
 
-def bilinear_interp3d(vol, x, y, z, out_size, edge_size=1):
-    with tf.variable_scope('bilinear_interp3d'):
-        batch_size, depth, height, width, channels = tf.shape(vol)
+def _interpolate3d(vol, x, y, z, out_size, method='bilinear', masked=False, cval=0):
+    return bilinear_interp3d(vol, x, y, z, out_size, masked=masked, cval=cval)
 
-        if edge_size>0:
-            vol = tf.pad(vol, [[0,0], [edge_size,edge_size], [edge_size,edge_size], [edge_size,edge_size], [0,0]], mode='CONSTANT')
 
-        x = tf.cast(x, tf.float32)
-        y = tf.cast(y, tf.float32)
-        z = tf.cast(z, tf.float32)
+def bilinear_interp3d(vol, x, y, z, out_size, edge_size=1, masked=False, cval=0):
+    batch_size, depth, height, width, channels = tf.shape(vol)
 
-        depth_f  = tf.cast(depth, tf.float32)
-        height_f = tf.cast(height, tf.float32)
-        width_f  = tf.cast(width, tf.float32)
+    if edge_size > 0:
+        vol = tf.pad(
+            vol,
+            [
+                [0, 0],
+                [edge_size, edge_size],
+                [edge_size, edge_size],
+                [edge_size, edge_size],
+                [0, 0],
+            ],
+            mode='CONSTANT',
+        )
 
-        out_depth  = out_size[0]
-        out_height = out_size[1]
-        out_width  = out_size[2]
+    x = tf.cast(x, tf.float32)
+    y = tf.cast(y, tf.float32)
+    z = tf.cast(z, tf.float32)
 
-        # scale indices to [0, width/height/depth - 1]
-        x = (x + 1.) / 2. * (width_f  -1.)
-        y = (y + 1.) / 2. * (height_f -1.)
-        z = (z + 1.) / 2. * (depth_f  -1.)
+    depth_f = tf.cast(depth, tf.float32)
+    height_f = tf.cast(height, tf.float32)
+    width_f = tf.cast(width, tf.float32)
 
-        # clip to to [0, width/height/depth - 1] +- edge_size
-        x = tf.clip_by_value(x, -edge_size, width_f  -1. + edge_size)
-        y = tf.clip_by_value(y, -edge_size, height_f -1. + edge_size)
-        z = tf.clip_by_value(z, -edge_size, depth_f  -1. + edge_size)
+    out_depth = out_size[0]
+    out_height = out_size[1]
+    out_width = out_size[2]
 
-        x += edge_size
-        y += edge_size
-        z += edge_size
+    border = (x < -1) | (x > 1) | (y < -1) | (y > 1) | (z < -1) | (z > 1)
+    border &= masked
+    border = tf.cast(border, tf.float32)
+    border = tf.tile(tf.expand_dims(border, 1), [1, channels])
+    mask = 1 - border
 
-        # do sampling
-        x0_f = tf.floor(x)
-        y0_f = tf.floor(y)
-        z0_f = tf.floor(z)
-        x1_f = x0_f + 1
-        y1_f = y0_f + 1
-        z1_f = z0_f + 1
+    # scale indices to [0, width/height/depth - 1]
+    x = (x + 1.0) / 2.0 * (width_f - 1.0)
+    y = (y + 1.0) / 2.0 * (height_f - 1.0)
+    z = (z + 1.0) / 2.0 * (depth_f - 1.0)
 
-        x0 = tf.cast(x0_f, tf.int32)
-        y0 = tf.cast(y0_f, tf.int32)
-        z0 = tf.cast(z0_f, tf.int32)
+    # clip to to [0, width/height/depth - 1] +- edge_size
+    x = tf.clip_by_value(x, -edge_size, width_f - 1.0 + edge_size)
+    y = tf.clip_by_value(y, -edge_size, height_f - 1.0 + edge_size)
+    z = tf.clip_by_value(z, -edge_size, depth_f - 1.0 + edge_size)
 
-        x1 = tf.cast(tf.minimum(x1_f, width_f  - 1. + 2*edge_size),  tf.int32)
-        y1 = tf.cast(tf.minimum(y1_f, height_f - 1. + 2*edge_size), tf.int32)
-        z1 = tf.cast(tf.minimum(z1_f, depth_f  - 1. + 2*edge_size), tf.int32)
+    x += edge_size
+    y += edge_size
+    z += edge_size
 
-        dim3 = (width + 2*edge_size)
-        dim2 = (width + 2*edge_size)*(height + 2*edge_size)
-        dim1 = (width + 2*edge_size)*(height + 2*edge_size)*(depth + 2*edge_size)
+    # do sampling
+    x0_f = tf.floor(x)
+    y0_f = tf.floor(y)
+    z0_f = tf.floor(z)
+    x1_f = x0_f + 1
+    y1_f = y0_f + 1
+    z1_f = z0_f + 1
 
-        base = _repeat(tf.range(batch_size)*dim1, out_depth*out_height*out_width)
-        base_z0 = base + z0*dim2
-        base_z1 = base + z1*dim2
+    x0 = tf.cast(x0_f, tf.int32)
+    y0 = tf.cast(y0_f, tf.int32)
+    z0 = tf.cast(z0_f, tf.int32)
 
-        base_y00 = base_z0 + y0*dim3
-        base_y01 = base_z0 + y1*dim3
-        base_y10 = base_z1 + y0*dim3
-        base_y11 = base_z1 + y1*dim3
+    x1 = tf.cast(tf.minimum(x1_f, width_f - 1.0 + 2 * edge_size), tf.int32)
+    y1 = tf.cast(tf.minimum(y1_f, height_f - 1.0 + 2 * edge_size), tf.int32)
+    z1 = tf.cast(tf.minimum(z1_f, depth_f - 1.0 + 2 * edge_size), tf.int32)
 
-        idx_000 = base_y00 + x0
-        idx_001 = base_y00 + x1
-        idx_010 = base_y01 + x0
-        idx_011 = base_y01 + x1
-        idx_100 = base_y10 + x0
-        idx_101 = base_y10 + x1
-        idx_110 = base_y11 + x0
-        idx_111 = base_y11 + x1
+    dim3 = width + 2 * edge_size
+    dim2 = (width + 2 * edge_size) * (height + 2 * edge_size)
+    dim1 = (width + 2 * edge_size) * (height + 2 * edge_size) * (depth + 2 * edge_size)
 
-        # use indices to lookup pixels in the flat image and restore
-        # channels dim
-        vol_flat = tf.reshape(vol, [-1, channels])
-        I000 = tf.gather(vol_flat, idx_000)
-        I001 = tf.gather(vol_flat, idx_001)
-        I010 = tf.gather(vol_flat, idx_010)
-        I011 = tf.gather(vol_flat, idx_011)
-        I100 = tf.gather(vol_flat, idx_100)
-        I101 = tf.gather(vol_flat, idx_101)
-        I110 = tf.gather(vol_flat, idx_110)
-        I111 = tf.gather(vol_flat, idx_111)
+    base = _repeat(tf.range(batch_size) * dim1, out_depth * out_height * out_width)
+    base_z0 = base + z0 * dim2
+    base_z1 = base + z1 * dim2
 
-        # and finally calculate interpolated values
-        w000 = tf.expand_dims((z1_f-z)*(y1_f-y)*(x1_f-x),1)
-        w001 = tf.expand_dims((z1_f-z)*(y1_f-y)*(x-x0_f),1)
-        w010 = tf.expand_dims((z1_f-z)*(y-y0_f)*(x1_f-x),1)
-        w011 = tf.expand_dims((z1_f-z)*(y-y0_f)*(x-x0_f),1)
-        w100 = tf.expand_dims((z-z0_f)*(y1_f-y)*(x1_f-x),1)
-        w101 = tf.expand_dims((z-z0_f)*(y1_f-y)*(x-x0_f),1)
-        w110 = tf.expand_dims((z-z0_f)*(y-y0_f)*(x1_f-x),1)
-        w111 = tf.expand_dims((z-z0_f)*(y-y0_f)*(x-x0_f),1)
+    base_y00 = base_z0 + y0 * dim3
+    base_y01 = base_z0 + y1 * dim3
+    base_y10 = base_z1 + y0 * dim3
+    base_y11 = base_z1 + y1 * dim3
 
-        output = tf.add_n([
-            w000*I000, 
-            w001*I001, 
-            w010*I010, 
-            w011*I011, 
-            w100*I100, 
-            w101*I101, 
-            w110*I110, 
-            w111*I111])
-        return output
+    idx_000 = base_y00 + x0
+    idx_001 = base_y00 + x1
+    idx_010 = base_y01 + x0
+    idx_011 = base_y01 + x1
+    idx_100 = base_y10 + x0
+    idx_101 = base_y10 + x1
+    idx_110 = base_y11 + x0
+    idx_111 = base_y11 + x1
+
+    # use indices to lookup pixels in the flat image and restore
+    # channels dim
+    vol_flat = tf.reshape(vol, [-1, channels])
+    I000 = tf.gather(vol_flat, idx_000)
+    I001 = tf.gather(vol_flat, idx_001)
+    I010 = tf.gather(vol_flat, idx_010)
+    I011 = tf.gather(vol_flat, idx_011)
+    I100 = tf.gather(vol_flat, idx_100)
+    I101 = tf.gather(vol_flat, idx_101)
+    I110 = tf.gather(vol_flat, idx_110)
+    I111 = tf.gather(vol_flat, idx_111)
+
+    # and finally calculate interpolated values
+    w000 = tf.expand_dims((z1_f - z) * (y1_f - y) * (x1_f - x), 1)
+    w001 = tf.expand_dims((z1_f - z) * (y1_f - y) * (x - x0_f), 1)
+    w010 = tf.expand_dims((z1_f - z) * (y - y0_f) * (x1_f - x), 1)
+    w011 = tf.expand_dims((z1_f - z) * (y - y0_f) * (x - x0_f), 1)
+    w100 = tf.expand_dims((z - z0_f) * (y1_f - y) * (x1_f - x), 1)
+    w101 = tf.expand_dims((z - z0_f) * (y1_f - y) * (x - x0_f), 1)
+    w110 = tf.expand_dims((z - z0_f) * (y - y0_f) * (x1_f - x), 1)
+    w111 = tf.expand_dims((z - z0_f) * (y - y0_f) * (x - x0_f), 1)
+
+    output = tf.add_n(
+        [
+            w000 * I000,
+            w001 * I001,
+            w010 * I010,
+            w011 * I011,
+            w100 * I100,
+            w101 * I101,
+            w110 * I110,
+            w111 * I111,
+        ]
+    )
+    output *= mask
+    output += border * cval
+
+    return output
 
 
 def bilinear_interp(im, x, y, out_size, masked=False, cval=0):

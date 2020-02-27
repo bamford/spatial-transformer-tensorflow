@@ -33,8 +33,8 @@ Legacy Function
 """
 
 
-def transformer(inp, theta, out_size, name="SpatialTransformer", **kwargs):
-    stl = AffineTransformer(name, out_size)
+def transformer(inp, theta, out_size, **kwargs):
+    stl = AffineTransformer(out_size)
     output = stl.transform(inp, theta)
     return output
 
@@ -46,13 +46,7 @@ class AffineVolumeTransformer(Layer):
     """
 
     def __init__(
-        self,
-        out_size,
-        name="SpatialAffineVolumeTransformer",
-        interp_method="bilinear",
-        masked=False,
-        cval=0,
-        **kwargs
+        self, out_size, interp_method="bilinear", masked=False, cval=0, **kwargs
     ):
         """
         Parameters
@@ -60,8 +54,12 @@ class AffineVolumeTransformer(Layer):
         out_size : tuple of three ints
             The size of the output of the spatial network (depth, height, width), i.e. z, y, x
         name : string
-            The scope name of the variables in this network.
-
+            The name of this layer
+        interp_method: 'bilinear' (default) or 'bicubic'
+        masked: bool (default: False)
+            Should the edges of the transformed images be masked
+        cval: int (default: 0)
+            Value to mask edges with if masked=True
         """
         self.out_size = out_size
         self.param_dim = 3 * 4
@@ -186,7 +184,7 @@ class AffineTransformer(Transformer2D):
 
     """
 
-    def __init__(self, out_size, name="SpatialAffineTransformer", **kwargs):
+    def __init__(self, out_size, **kwargs):
         """
         Parameters
         ----------
@@ -200,7 +198,7 @@ class AffineTransformer(Transformer2D):
         cval: int (default: 0)
             Value to mask edges with if masked=True
         """
-        super().__init__(out_size, name=name, **kwargs)
+        super().__init__(out_size, **kwargs)
         self.param_dim = 6
         self.pixel_grid = _meshgrid(out_size)
 
@@ -259,7 +257,7 @@ class RestrictedTransformer(AffineTransformer):
 
     """
 
-    def __init__(self, out_size, name="SpatialRestrictedTransformer", **kwargs):
+    def __init__(self, out_size, **kwargs):
         """
         Parameters
         ----------
@@ -273,7 +271,7 @@ class RestrictedTransformer(AffineTransformer):
         cval: int (default: 0)
             Value to mask edges with if masked=True
         """
-        super().__init__(out_size, name=name, **kwargs)
+        super().__init__(out_size, **kwargs)
         self.param_dim = 5
 
     def call(self, tensors, mask=None):
@@ -334,7 +332,7 @@ class ProjectiveTransformer(Transformer2D):
 
     """
 
-    def __init__(self, out_size, name="SpatialProjectiveTransformer", **kwargs):
+    def __init__(self, out_size, **kwargs):
         """
         Parameters
         ----------
@@ -348,7 +346,7 @@ class ProjectiveTransformer(Transformer2D):
         cval: int (default: 0)
             Value to mask edges with if masked=True
         """
-        super().__init__(out_size, name=name, **kwargs)
+        super().__init__(out_size, **kwargs)
         self.param_dim = 8
         self.pixel_grid = _meshgrid(out_size)
 
@@ -417,9 +415,7 @@ class ElasticTransformer(Transformer2D):
 
     """
 
-    def __init__(
-        self, out_size, param_dim=2 * 16, name="SpatialElasticTransformer", **kwargs
-    ):
+    def __init__(self, out_size, param_dim=2 * 16, **kwargs):
         """
         Parameters
         ----------
@@ -434,7 +430,7 @@ class ElasticTransformer(Transformer2D):
         cval: int (default: 0)
             Value to mask edges with if masked=True
         """
-        super().__init__(out_size, name=name, **kwargs)
+        super().__init__(out_size, **kwargs)
         num_control_points = int(param_dim / 2)
         assert (
             param_dim == 2 * num_control_points
@@ -498,7 +494,6 @@ class ElasticTransformer(Transformer2D):
             self.num_pixels,
             self.pixel_distances,
             self.L_inv,
-            self.name + "_elastic_transform",
             forward,
         )
         if forward:
@@ -512,7 +507,6 @@ class ElasticTransformer(Transformer2D):
                 self.num_pixels,
                 self.pixel_distances,
                 self.L_inv,
-                self.name + "_elastic_transform",
                 forward,
             )
             output = self.interpolate(inp, rx_s, ry_s, self.out_size)
@@ -533,7 +527,6 @@ class ElasticTransformer(Transformer2D):
         num_pixels,
         pixel_distances,
         L_inv,
-        name,
         forward=True,
     ):
         batch_size = tf.shape(inp)[0]

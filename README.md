@@ -24,7 +24,7 @@ The original code has been updated in a number of ways by Steven Bamford (@bamfo
 ## How to use
 
 ```python
-from stn import AffineTransformer, ProjectiveTransformer, ElasticTransformer, RestrictedTransformer
+from spatial_transformer import AffineTransformer, ProjectiveTransformer, ElasticTransformer, RestrictedTransformer
 
 # Initialize
 outsize = [300, 300]

@@ -184,7 +184,7 @@ class AffineTransformer(Transformer2D):
 
     """
 
-    def __init__(self, out_size, **kwargs):
+    def __init__(self, out_size, preserve_flux=False, **kwargs):
         """
         Parameters
         ----------
@@ -197,10 +197,13 @@ class AffineTransformer(Transformer2D):
             Should the edges of the transformed images be masked
         cval: int (default: 0)
             Value to mask edges with if masked=True
+        preserve_flux: bool (default: False)
+            Preserve total flux during transformation
         """
         super().__init__(out_size, **kwargs)
         self.param_dim = 6
         self.pixel_grid = _meshgrid(out_size)
+        self.preserve_flux = preserve_flux
 
     def call(self, tensors, mask=None):
         """
@@ -233,6 +236,15 @@ class AffineTransformer(Transformer2D):
         outshape = tf.stack([shape[0], self.out_size[0], self.out_size[1], shape[3]])
         output = tf.reshape(output, outshape)
 
+        if self.preserve_flux:
+            # account for affine rescaling
+            flux_scale = tf.abs(theta[:, 0] * theta[:, 4] - theta[:, 1] * theta[:, 3])
+            # account for change in pixel size
+            in_size = tf.cast(shape[1:3], tf.float32)
+            flux_scale *= in_size[0] / self.out_size[0] * in_size[1] / self.out_size[1]
+            flux_scale = tf.reshape(flux_scale, (outshape[0], 1, 1, 1))
+            output *= flux_scale
+
         return output
 
     def _transform(self, inp, theta):
@@ -248,6 +260,11 @@ class AffineTransformer(Transformer2D):
         x_s_flat = tf.reshape(x_s, [-1])
         y_s_flat = tf.reshape(y_s, [-1])
         return x_s_flat, y_s_flat
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({"preserve_flux": self.preserve_flux})
+        return config
 
 
 class RestrictedTransformer(AffineTransformer):
@@ -270,6 +287,8 @@ class RestrictedTransformer(AffineTransformer):
             Should the edges of the transformed images be masked
         cval: int (default: 0)
             Value to mask edges with if masked=True
+        preserve_flux: bool (default: False)
+            Preserve total flux during transformation
         reverse: bool (default: False)
             Reverse order of the transformation operations:
             Regular order is: scale, then rotate, then translate

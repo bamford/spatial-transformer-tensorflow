@@ -257,7 +257,7 @@ class RestrictedTransformer(AffineTransformer):
 
     """
 
-    def __init__(self, out_size, **kwargs):
+    def __init__(self, out_size, reverse=False, **kwargs):
         """
         Parameters
         ----------
@@ -270,9 +270,14 @@ class RestrictedTransformer(AffineTransformer):
             Should the edges of the transformed images be masked
         cval: int (default: 0)
             Value to mask edges with if masked=True
+        reverse: bool (default: False)
+            Reverse order of the transformation operations:
+            Regular order is: scale, then rotate, then translate
+            Reverse order is: translate, then rotate, then scale
         """
         super().__init__(out_size, **kwargs)
         self.param_dim = 5
+        self.reverse = reverse
 
     def call(self, tensors, mask=None):
         """
@@ -308,18 +313,30 @@ class RestrictedTransformer(AffineTransformer):
         cos_angle = tf.cos(angle)
         x_translation = theta[:, 3]
         y_translation = theta[:, 4]
-        affine = tf.transpose(
-            tf.stack(
-                [
-                    x_scale * cos_angle,
-                    -y_scale * sin_angle,
-                    x_translation,
-                    x_scale * sin_angle,
-                    y_scale * cos_angle,
-                    y_translation,
-                ]
-            )
-        )
+        if self.reverse:
+            affine = [
+                x_scale * cos_angle,
+                -y_scale * sin_angle,
+                x_translation,
+                x_scale * sin_angle,
+                y_scale * cos_angle,
+                y_translation,
+            ]
+        else:
+            xsc = x_scale * cos_angle
+            xss = x_scale * sin_angle
+            ysc = y_scale * cos_angle
+            yss = y_scale * sin_angle
+            affine = [
+                xsc,
+                -xss,
+                x_translation * xsc - y_translation * xss,
+                yss,
+                ysc,
+                x_translation * yss + y_translation * ysc,
+            ]
+        affine = tf.transpose(tf.stack(affine))
+
         output = super().call([inp, affine])
         return output
 

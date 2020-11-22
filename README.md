@@ -15,7 +15,8 @@ The original code has been updated in a number of ways by Steven Bamford (@bamfo
 * now compatibile with TensorFlow's eager execution model
 * transformation classes now inherit from Keras Layer
 * include a Restricted Transformation (see below for explanation)
-* optional edge masking with constant value, rather than nearest neighbour.
+* optional edge masking with constant value, rather than nearest neighbour
+* option to preserve flux (in Affine and Restricted Transformation).
 
 <div align="center">
   <img src="imgs/pipeline.png"><br>
@@ -75,7 +76,26 @@ example_elastic.py shows how to use ElasticTransformer. Here, deformations are d
 </div>
 
 ### RestrictedTransformer
-example_affine.py shows how to use RestrictedTransformer. This behaves similarly to AffineTransformer, but takes more directly comprehensible parameters, designed in such a way as to restrict possible transformations. The transformation parameters, `theta`, are (`x_scale`, `y_scale`, `rotation`, `x_translation`, `y_translation`), where the scales are logarithms of the actual scale factor and the rotation is given as tan(angle/2). This prevents reflections and limits rotations to ±180 degrees. The parameterisation also makes it easier to apply further external restrictions on the transformations (e.g. not allowing rotations, only allowing isotropic scaling, etc.). 
+example_affine.py shows how to use RestrictedTransformer. This behaves
+similarly to AffineTransformer, but takes more directly comprehensible
+parameters, designed in such a way as to restrict possible
+transformations. The transformation parameters, `theta`, are
+(`x_scale`, `y_scale`, `rotation`, `x_translation`, `y_translation`),
+where the scales are logarithms of the actual scale factor and the
+rotation is given as tan(angle/2). This prevents reflections and
+limits rotations to ±180 degrees. The parameterisation also makes it
+easier to apply further external restrictions on the transformations
+(e.g. not allowing rotations, only allowing isotropic scaling, etc.).
+
+By default the transformations are applied in the order: scale, then
+rotate, then translate. This is appropriate (and vital) when
+reintroduce transformations to a 'standardised' image. However, for
+transforming an input image to a 'standardised' (centred, derotated,
+circularised) format, the reverse order is required: translate, then
+rotate, then scale. This is available by specifying
+`reverse=True`. Note that previously only the 'reverse' order was
+implemented; the default behaviour was changed in commit 7b5f28 on
+2020-11-22.
 
 <div align="center">
   <img src="imgs/restricted0.png">
